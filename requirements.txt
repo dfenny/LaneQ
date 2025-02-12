@@ -1,3 +1,4 @@
 pycocotools
 opencv-python
 numpy
+scipy
