@@ -35,10 +35,7 @@ def construct_spline(curve_points):
     xs = eval[0]
     ys = eval[1]
     return xs, ys
-    # tck, u = splprep([curve_points[:, 0], curve_points[:, 1]], s=0, k=2)
-    # u_fine = np.linspace(0, 1, 100)
-    # curve_x, curve_y = splev(u_fine, tck)
-    # return curve_x, curve_y
+
 
 def group_lines(points):
     """Groups lane marking points into line or curve segments."""
@@ -60,20 +57,6 @@ def construct_line(points):
         )
     else:
         return [x for x, _, _ in points], [y for _, y, _ in points]
-    # for group_dict in groups:
-    #     for group_type, group_points in group_dict.items():
-    #         if group_type == "L":
-    #             x_list += [x for x, _ in group_points]
-    #             y_list += [y for _, y in group_points]
-    #         elif group_type == "C":
-    #             spline_points = np.array(group_points, dtype=np.int32)
-    #             xs, ys = construct_spline(spline_points.T)
-    #             x_list += xs.tolist()
-    #             y_list += ys.tolist()
-    #             # x_list += [x for x, _ in group_points]
-    #             # y_list += [y for _, y in group_points]
-    #         else:
-    #             warnings.warn(f"Unexpected data type: {group_type}")
     return x_list, y_list
 
 def load_image_and_annotations(index):
