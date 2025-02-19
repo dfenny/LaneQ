@@ -2,12 +2,12 @@ import json
 import os
 import numpy as np
 import cv2
-import warnings
 import tkinter as tk
 from tkinter import Label
 import bezier
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import shapely
 
 # Directory paths
 image_dir = os.path.expanduser("~/Downloads/bdd100k_images/train/")
@@ -25,7 +25,7 @@ root = tk.Tk()
 root.title("Lane Marking Viewer")
 
 # Matplotlib figure
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots()
 
 def construct_spline(curve_points):
     """Constructs a smooth spline curve."""
@@ -57,6 +57,30 @@ def construct_line(points):
         )
     else:
         return [x for x, _, _ in points], [y for _, y, _ in points]
+    
+def points_to_area(points):
+    polygon = shapely.geometry.polygon(points)
+    return polygon.area
+
+def get_largest_area_for_two_sets_of_points(points1, points2):
+    """ Checks both orders of two sets of points (two lines) to see which is smallest.
+
+    points must be in format [(x, y), ... , (x, y)]
+    """
+    area1 = points_to_area(points1 + points2)
+    area2 = points_to_area(points2 + points1)
+    return area1 if area1 > area2 else area2
+
+def sort_through_lines_to_find_matches(objects):
+    """ Given a list of objects, find the lane types we're interested in and
+    sort them out and then work with each group individually
+    """
+    # First group the objects into similar lane types
+
+    # Second for each line in each lane type find the right groupings
+
+    # Third pass back the areas covered by the groupings
+    pass
 
 def load_image_and_annotations(index):
     """Loads the image and lane markings for the given index."""
@@ -109,7 +133,7 @@ def load_image_and_annotations(index):
                 # else:
                 #     color = "blue"
                 color = lane_colors.get(obj["category"], "red")
-                line, = ax.plot(xs, ys, label=obj["category"], color=color)
+                line, = ax.plot(xs, ys, label=obj["category"], color=color, lw=1)
 
                 # Only add to legend if not already included
                 if obj["category"] not in [handle.get_label() for handle in legend_handles]:
