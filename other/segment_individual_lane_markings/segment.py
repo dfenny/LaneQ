@@ -57,7 +57,6 @@ def construct_line(points):
         )
     else:
         return [x for x, _, _ in points], [y for _, y, _ in points]
-    return x_list, y_list
 
 def load_image_and_annotations(index):
     """Loads the image and lane markings for the given index."""
@@ -84,18 +83,39 @@ def load_image_and_annotations(index):
     # Show the image
     ax.imshow(img)
 
+    # Define colors for each lane type
+    lane_colors = {
+        "lane/crosswalk": "blue",
+        "lane/double other": "purple",
+        "lane/double white": "white",
+        "lane/double yellow": "yellow",
+        "lane/road curb": "pink",
+        "lane/single other": "olive",
+        "lane/single white": "white",
+        "lane/single yellow": "orange"
+    }
+
+    # Store handles for legend
+    legend_handles = []
+
     # Extract lane markings and plot them
     for frame in data["frames"]:
         for obj in frame["objects"]:
             if "lane" in obj["category"] and "poly2d" in obj:
                 points = [(p[0], p[1], p[2]) for p in obj["poly2d"]]
                 xs, ys = construct_line(points)
-                if "C" in [c for x, y, c in obj["poly2d"]]:
-                    color = "red"
-                else:
-                    color = "blue"
-                ax.plot(xs, ys, label=obj["category"], color=color)
+                # if "C" in [c for x, y, c in obj["poly2d"]]:
+                #     color = "red"
+                # else:
+                #     color = "blue"
+                color = lane_colors.get(obj["category"], "red")
+                line, = ax.plot(xs, ys, label=obj["category"], color=color)
 
+                # Only add to legend if not already included
+                if obj["category"] not in [handle.get_label() for handle in legend_handles]:
+                    legend_handles.append(line)
+
+    ax.legend(handles=legend_handles, loc="upper right", fontsize=8, title="Lane Markings")
     ax.set_title(f"Image {index+1}/{len(image_files)}: {image_files[index]}")
     ax.set_xticks([])
     ax.set_yticks([])
