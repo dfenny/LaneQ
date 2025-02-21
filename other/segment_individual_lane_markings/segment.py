@@ -1,3 +1,4 @@
+from itertools import combinations
 import json
 import os
 import numpy as np
@@ -7,7 +8,7 @@ from tkinter import Label
 import bezier
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import shapely
+from shapely import Polygon, LineString
 
 # Directory paths
 image_dir = os.path.expanduser("~/Downloads/bdd100k_images/train/")
@@ -32,8 +33,8 @@ def construct_spline(curve_points):
     curve = bezier.Curve.from_nodes(curve_points)
     space = np.linspace(0, 1, 100)
     eval = curve.evaluate_multi(space)
-    xs = eval[0]
-    ys = eval[1]
+    xs = eval[0].tolist()
+    ys = eval[1].tolist()
     return xs, ys
 
 
@@ -57,30 +58,65 @@ def construct_line(points):
         )
     else:
         return [x for x, _, _ in points], [y for _, y, _ in points]
-    
-def points_to_area(points):
-    polygon = shapely.geometry.polygon(points)
-    return polygon.area
 
-def get_largest_area_for_two_sets_of_points(points1, points2):
-    """ Checks both orders of two sets of points (two lines) to see which is smallest.
+def construct_line_tuples(poly2d):
+    """Constructs xs and ys, then feeds construct_line, and returns outputs like:
+    
+    [(x, y), ... , (x, y)]
+    """
+    points = [(p[0], p[1], p[2]) for p in poly2d]
+    xs, ys = construct_line(points)
+    return [(x, y) for x, y in zip(xs, ys)]
+
+def get_largest_area_polygon(points1, points2):
+    """ Checks both orders of two sets of points (two lines) to see which 
+    creates the polygon with the smallest area.
 
     points must be in format [(x, y), ... , (x, y)]
     """
-    area1 = points_to_area(points1 + points2)
-    area2 = points_to_area(points2 + points1)
-    return area1 if area1 > area2 else area2
+    line_1 = LineString(points1)
+    line_2 = LineString(points2)
+    greatest_allowable_hd = 100
+    if line_1.hausdorff_distance(line_2) > greatest_allowable_hd:
+        return None
+    shape_1 = points1 + points2
+    shape_2 = points1 + points2[::-1]
+    poly_1 = Polygon(shape_1)
+    poly_2 = Polygon(shape_2)
+    return poly_1 if poly_1.is_valid else poly_2 if poly_2.is_valid else None
 
 def sort_through_lines_to_find_matches(objects):
     """ Given a list of objects, find the lane types we're interested in and
     sort them out and then work with each group individually
     """
     # First group the objects into similar lane types
-
+    obj_groups = {}
+    for obj in objects:
+        obj_groups.setdefault(
+            (obj["category"], obj["attributes"]["direction"],
+             obj["attributes"]["style"]), []
+            ).append(
+            construct_line_tuples(obj["poly2d"])
+        )
     # Second for each line in each lane type find the right groupings
-
+    polygons = {}
+    for group_key, group in obj_groups.items():
+        for possible_polygon in combinations(group, 2):
+            polygon = get_largest_area_polygon(*possible_polygon)
+            if polygon:
+                polygons[polygon] = group_key
+    # (make sure no polygons overlap or intersect)
+    for poly1, poly2 in combinations(polygons, 2):
+        intersection = poly1.intersection(poly2)
+        if intersection.length > 0 or intersection.area > 0:
+            if poly1.area < poly2.area:
+                gone_poly = poly2
+            else:
+                gone_poly = poly1
+            if gone_poly in polygons:
+                del polygons[gone_poly]
     # Third pass back the areas covered by the groupings
-    pass
+    return polygons
 
 def load_image_and_annotations(index):
     """Loads the image and lane markings for the given index."""
@@ -109,11 +145,11 @@ def load_image_and_annotations(index):
 
     # Define colors for each lane type
     lane_colors = {
-        "lane/crosswalk": "blue",
+        # "lane/crosswalk": "blue",
         "lane/double other": "purple",
         "lane/double white": "white",
         "lane/double yellow": "yellow",
-        "lane/road curb": "pink",
+        # "lane/road curb": "pink",
         "lane/single other": "olive",
         "lane/single white": "white",
         "lane/single yellow": "orange"
@@ -124,8 +160,10 @@ def load_image_and_annotations(index):
 
     # Extract lane markings and plot them
     for frame in data["frames"]:
+        objects = []
         for obj in frame["objects"]:
-            if "lane" in obj["category"] and "poly2d" in obj:
+            if obj["category"] in lane_colors and "poly2d" in obj:
+                objects.append(obj)
                 points = [(p[0], p[1], p[2]) for p in obj["poly2d"]]
                 xs, ys = construct_line(points)
                 # if "C" in [c for x, y, c in obj["poly2d"]]:
@@ -133,11 +171,23 @@ def load_image_and_annotations(index):
                 # else:
                 #     color = "blue"
                 color = lane_colors.get(obj["category"], "red")
-                line, = ax.plot(xs, ys, label=obj["category"], color=color, lw=1)
+                line, = ax.plot(xs, ys, '--', label=obj["category"], color=color, lw=1)
 
                 # Only add to legend if not already included
                 if obj["category"] not in [handle.get_label() for handle in legend_handles]:
                     legend_handles.append(line)
+        
+        # get polygons from lane markings:
+        polygons = sort_through_lines_to_find_matches(objects)
+
+        for polygon, lane_type in polygons.items():
+            x, y = polygon.exterior.xy
+            color = lane_colors.get(lane_type, "red")
+            # line, = ax.plot(x, y, label=lane_type, color=color, linewidth=1)
+            ax.fill(x, y, color=color, alpha=0.5)
+            # Only add to legend if not already included
+            # if lane_type not in [handle.get_label() for handle in legend_handles]:
+            #     legend_handles.append(line)
 
     ax.legend(handles=legend_handles, loc="upper right", fontsize=8, title="Lane Markings")
     ax.set_title(f"Image {index+1}/{len(image_files)}: {image_files[index]}")
