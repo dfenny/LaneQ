@@ -3,30 +3,32 @@ import json
 import os
 import numpy as np
 import cv2
-import tkinter as tk
-from tkinter import Label
 import bezier
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from shapely import Polygon, LineString
+
+import matplotlib.pyplot as plt
 
 # Directory paths
 image_dir = os.path.expanduser("~/Downloads/bdd100k_images/train/")
 json_dir = os.path.expanduser("~/Downloads/bdd100k_annotations/train/")
+segmaps_dir = os.path.expanduser("~/Downloads/bdd100k_seg_maps/color_labels/train")
 
 # Get all images
 image_files = sorted([f for f in os.listdir(image_dir) if f.endswith(".jpg")])
 json_files = sorted([f for f in os.listdir(json_dir) if f.endswith(".json")])
+segmaps_files = sorted([f for f in os.listdir(segmaps_dir) if f.endswith(".png")])
 
-# Index tracker
-current_index = 29
+lane_colors = {
+    # "lane/crosswalk": "blue",
+    "lane/double other": "purple",
+    "lane/double white": "white",
+    "lane/double yellow": "yellow",
+    # "lane/road curb": "pink",
+    "lane/single other": "olive",
+    "lane/single white": "white",
+    "lane/single yellow": "orange"
+}
 
-# Tkinter window
-root = tk.Tk()
-root.title("Lane Marking Viewer")
-
-# Matplotlib figure
-fig, ax = plt.subplots()
 
 def construct_spline(curve_points):
     """Constructs a smooth spline curve."""
@@ -118,118 +120,85 @@ def sort_through_lines_to_find_matches(objects):
     # Third pass back the areas covered by the groupings
     return polygons
 
-def load_image_and_annotations(index):
-    """Loads the image and lane markings for the given index."""
-    global ax
+def process_polygon_into_mask(polygon, lanetype, img, road_color):
+    ln_cat, ln_dir, ln_style = lanetype
+    paint_color = ln_cat.split(" ")[-1]
+    # Create mask from polygon:
+    image_shape = img.shape[:2]
+    mask = np.zeros(image_shape, dtype=np.uint8)
+    contour = np.array(polygon.exterior.coords, dtype=np.int32)
+    cv2.fillPoly(mask, [contour], 255)
+    # Handle solid lane lines first (they are simplest)
+    if ln_style == "solid":
+        return mask
+    elif ln_dir == "parallel" and ln_style == "dashed":
+        mask = refine_mask_by_color_distance(mask, img, road_color, tolerance=50)
+    # mask = refine_mask_by_color_distance(mask, img, road_color, tolerance=50)
+    return mask
 
-    ax.clear()
+def refine_mask_by_color_distance(mask, img, road_color, tolerance):
+    # Convert image and road_color to int16 for safe subtraction
+    img_int = img.astype(np.int16)
+    road_color = np.array(road_color, dtype=np.int16)
+    
+    # Compute Euclidean distance for each pixel from road_color
+    diff = np.linalg.norm(img_int - road_color, axis=2)
+    
+    # Create a mask where pixels beyond the tolerance are marked (True)
+    distance_mask = (diff > tolerance).astype(np.uint8) * 255
+    
+    # Combine with the original mask
+    refined_mask = cv2.bitwise_and(mask, distance_mask)
+    return refined_mask
 
-    # Load image
+def extract_annotations(index):
+    """Extracts the lane marking annotations from the JSON file for the given index."""
+    
     img_path = os.path.join(image_dir, image_files[index])
     json_path = os.path.join(json_dir, json_files[index])
+    segmaps_path = os.path.join(segmaps_dir, segmaps_files[index])
 
     try:
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        h, w, _ = img.shape
     except:
-        h, w = 800, 1200
-        img = np.ones((h, w, 3), dtype=np.uint8) * 255
+        img = np.ones((800, 1200, 3), dtype=np.uint8) * 255  # Default white image if loading fails
+    
+    segmap_mask = cv2.imread(segmaps_path)
+    segmap_mask = cv2.cvtColor(segmap_mask, cv2.COLOR_BGR2RGB)
 
     # Load JSON annotations
     with open(json_path, "r") as f:
         data = json.load(f)
 
-    # Show the image
-    ax.imshow(img)
-
-    # Define colors for each lane type
-    lane_colors = {
-        # "lane/crosswalk": "blue",
-        "lane/double other": "purple",
-        "lane/double white": "white",
-        "lane/double yellow": "yellow",
-        # "lane/road curb": "pink",
-        "lane/single other": "olive",
-        "lane/single white": "white",
-        "lane/single yellow": "orange"
-    }
-
-    # Store handles for legend
-    legend_handles = []
-
-    # Extract lane markings and plot them
+    objects = []
     for frame in data["frames"]:
-        objects = []
         for obj in frame["objects"]:
             if obj["category"] in lane_colors and "poly2d" in obj:
                 objects.append(obj)
-                points = [(p[0], p[1], p[2]) for p in obj["poly2d"]]
-                xs, ys = construct_line(points)
-                # if "C" in [c for x, y, c in obj["poly2d"]]:
-                #     color = "red"
-                # else:
-                #     color = "blue"
-                color = lane_colors.get(obj["category"], "red")
-                line, = ax.plot(xs, ys, '--', label=obj["category"], color=color, lw=1)
 
-                # Only add to legend if not already included
-                if obj["category"] not in [handle.get_label() for handle in legend_handles]:
-                    legend_handles.append(line)
-        
-        # get polygons from lane markings:
-        polygons = sort_through_lines_to_find_matches(objects)
+    # Get polygons from lane markings
+    polygons = sort_through_lines_to_find_matches(objects)
 
-        for polygon, lane_type in polygons.items():
-            x, y = polygon.exterior.xy
-            color = lane_colors.get(lane_type, "red")
-            # line, = ax.plot(x, y, label=lane_type, color=color, linewidth=1)
-            ax.fill(x, y, color=color, alpha=0.5)
-            # Only add to legend if not already included
-            # if lane_type not in [handle.get_label() for handle in legend_handles]:
-            #     legend_handles.append(line)
+    # Get median road color
+    road_mask_val = (128, 64, 128)
+    rgb_array = np.array(road_mask_val, dtype=np.uint8)
+    road_mask = np.all(segmap_mask == rgb_array, axis=2).astype(np.uint8) * 255
+    road_pixels = img[road_mask > 0]
+    road_color = np.median(road_pixels, axis=0)
 
-    ax.legend(handles=legend_handles, loc="upper right", fontsize=8, title="Lane Markings")
-    ax.set_title(f"Image {index+1}/{len(image_files)}: {image_files[index]}")
-    ax.set_xticks([])
-    ax.set_yticks([])
+    masks = []
+    for polygon, lane_type in polygons.items():
+        masks.append(
+            process_polygon_into_mask(polygon, lane_type, img, road_color)
+        )
+    
+    # Combine all masks:
+    image_shape = img.shape[:2]
+    combined_mask = np.zeros(image_shape, dtype=np.uint8)
+    for mask in masks:
+        combined_mask = cv2.bitwise_or(combined_mask, mask)
 
-    canvas.draw()
+    return img, objects, polygons, combined_mask
 
-def prev_image():
-    """Loads the previous image."""
-    global current_index
-    if current_index > 0:
-        current_index -= 1
-        load_image_and_annotations(current_index)
-
-def next_image():
-    """Loads the next image."""
-    global current_index
-    if current_index < len(image_files) - 1:
-        current_index += 1
-        load_image_and_annotations(current_index)
-
-# Create a Tkinter frame
-frame = tk.Frame(root)
-frame.pack()
-
-# Embed Matplotlib figure into Tkinter
-canvas = FigureCanvasTkAgg(fig, master=frame)
-
-# Frame for navigation buttons
-# button_frame = tk.Frame(root)
-# button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10)
-
-prev_button = tk.Button(frame, text="Previous Photo", command=prev_image)
-prev_button.pack(side=tk.LEFT, padx=10, pady=5, expand=True)
-
-next_button = tk.Button(frame, text="Next Photo", command=next_image)
-next_button.pack(side=tk.RIGHT, padx=10, pady=5, expand=True)
-
-canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-# Load the first image
-load_image_and_annotations(current_index)
-
-# Start the Tkinter main loop
-root.mainloop()
+extract_annotations(29)
