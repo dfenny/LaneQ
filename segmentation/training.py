@@ -2,7 +2,6 @@ import torch
 import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
-from models.unet import UNet
 from utils.dataset import SegmentationDataset
 import argparse
 from models import get_model
