@@ -6,24 +6,38 @@ from models.unet import UNet
 from utils.dataset import SegmentationDataset
 import argparse
 from models import get_model
+import yaml
 
-# Hyperparameters (Not sure if to leave this here or in the configs directory)
-num_epochs = 100
-learning_rate = 0.1
-batch_size = 64
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# These hyperparameter values are just placeholders
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# Helper function to load the hyperparameters from a YAML file
+def load_config(config_path):
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+# Parsing the command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--model', type=str, default='unet', help='Model architecture to use')
+parser.add_argument('--config', type=str, default='configs/unet.yaml', help='Path to the config file of the model being trained')
+args = parser.parse_args()
+
+# Loading the hyperparameters from the YAML file
+config = load_config(args.config)
+model_config = config[args.model]
+
+in_channels = model_config['model']['in_channels']
+out_channels = model_config['model']['out_channels']
+
+num_epochs = model_config['training']['num_epochs']
+learning_rate = model_config['training']['learning_rate']
+batch_size = model_config['training']['batch_size']
 
 # Creating the PyTorch DataLoader
 train_dataset = SegmentationDataset(image_dir='data/images/train', mask_dir='data/masks/train') # Again, the paths are just placeholders as mentioned in the data directory README
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) 
 
 # Initializing the model, loss function, and the optimizer
-parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default='unet', help='Model architecture to use')
-args = parser.parse_args()
-
-model = get_model(args.model, in_channels=3, out_channels=1).to(device)
+model = get_model(args.model, in_channels=in_channels, out_channels=out_channels).to(device)
 criterion = nn.BCELoss()  # Apparently this is the loss function to use for binary segmentation tasks. But I'm not sure if it's the best one (Use BCEWithLogitsLoss() if torch.forward() doesn't have a sigmoid layer)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
