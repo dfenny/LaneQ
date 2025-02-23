@@ -24,7 +24,7 @@ parser.add_argument('--model', type=str, default='unet', help='Model architectur
 args = parser.parse_args()
 
 model = get_model(args.model, in_channels=3, out_channels=1).to(device)
-criterion = nn.BCELoss()  # Apparently this is the loss function to use for binary segmentation tasks. But I'm not sure if it's the best one
+criterion = nn.BCELoss()  # Apparently this is the loss function to use for binary segmentation tasks. But I'm not sure if it's the best one (Use BCEWithLogitsLoss() if torch.forward() doesn't have a sigmoid layer)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Training loop
