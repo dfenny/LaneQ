@@ -5,6 +5,8 @@ import numpy as np
 import cv2
 import bezier
 from shapely import Polygon, LineString
+from PIL import Image
+from tqdm import trange
 
 import matplotlib.pyplot as plt
 
@@ -201,4 +203,12 @@ def extract_annotations(index):
 
     return img, objects, polygons, combined_mask
 
-extract_annotations(29)
+if __name__ == "__main__":
+    out_dir = "masks"
+    os.makedirs(out_dir, exist_ok=True)
+    for ind in trange(len(image_files)):
+        _, _, _, mask = extract_annotations(ind)
+        msk_img = Image.fromarray(mask)
+        img_name = image_files[ind]
+        img_name = img_name.replace("jpg", "png")
+        msk_img.save(os.path.join(out_dir, img_name))
