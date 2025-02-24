@@ -22,8 +22,7 @@ parser.add_argument('--checkpoint', type=str, default=None, help='Path to the ch
 args = parser.parse_args()
 
 # Loading the hyperparameters from the YAML file
-config = load_config(args.config)
-model_config = config[args.model]
+model_config = load_config(args.config)
 
 in_channels = model_config['model']['in_channels']
 out_channels = model_config['model']['out_channels']
@@ -35,6 +34,8 @@ batch_size = model_config['training']['batch_size']
 # Creating the PyTorch DataLoader
 train_dataset = SegmentationDataset(image_dir='data/images/train', mask_dir='data/masks/train') # Again, the paths are just placeholders as mentioned in the data directory README
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) 
+
+# TODO: Create DataLoader for validation set
 
 # Initializing the model, loss function, and the optimizer
 model = get_model(args.model, in_channels=in_channels, out_channels=out_channels).to(device)
