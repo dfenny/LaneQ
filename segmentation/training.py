@@ -18,6 +18,7 @@ def load_config(config_path):
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='unet', help='Model architecture to use')
 parser.add_argument('--config', type=str, default='configs/unet.yaml', help='Path to the config file of the model being trained')
+parser.add_argument('--checkpoint', type=str, default=None, help='Path to the checkpoint file to resume training or to fine tune the model')
 args = parser.parse_args()
 
 # Loading the hyperparameters from the YAML file
@@ -39,6 +40,10 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 model = get_model(args.model, in_channels=in_channels, out_channels=out_channels).to(device)
 criterion = nn.BCELoss()  # Apparently this is the loss function to use for binary segmentation tasks. But I'm not sure if it's the best one (Use BCEWithLogitsLoss() if torch.forward() doesn't have a sigmoid layer)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# Loading the checkpoint if provided
+if args.checkpoint:
+    model.load_state_dict(torch.load(args.checkpoint))
 
 # Training loop
 for epoch in range(num_epochs):
