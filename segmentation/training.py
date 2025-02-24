@@ -35,7 +35,9 @@ batch_size = model_config['training']['batch_size']
 train_dataset = SegmentationDataset(image_dir='data/images/train', mask_dir='data/masks/train') # Again, the paths are just placeholders as mentioned in the data directory README
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) 
 
-# TODO: Create DataLoader for validation set
+# Create DataLoader for validation set
+val_dataset = SegmentationDataset(image_dir='data/images/val', mask_dir='data/masks/val') # Again, the paths are just placeholders as mentioned in the data directory README
+val_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) 
 
 # Initializing the model, loss function, and the optimizer
 model = get_model(args.model, in_channels=in_channels, out_channels=out_channels).to(device)
