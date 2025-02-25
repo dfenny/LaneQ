@@ -1,0 +1,10 @@
+model:
+  in_channels: 3
+  out_channels: 1 # Leave this one for binary segmentation, Change to 2 if we're segmentign dashed lines and solid lines separately
+
+training: # Placeholder hyperparameters
+  num_epochs: 100  
+  learning_rate: 0.1
+  batch_size: 64
+
+# TODO: Add the image_dir and mask_dir paths here?
