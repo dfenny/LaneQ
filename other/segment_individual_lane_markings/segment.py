@@ -122,9 +122,15 @@ def sort_through_lines_to_find_matches(objects):
     # Third pass back the areas covered by the groupings
     return polygons
 
-def process_polygon_into_mask(polygon, lanetype, img, road_color):
+def process_polygon_into_mask(polygon, lanetype, img):
     ln_cat, ln_dir, ln_style = lanetype
     paint_color = ln_cat.split(" ")[-1]
+    if paint_color == "white":
+        paint_color = [200,200,200]
+    elif paint_color == "yellow":
+        paint_color == [190,150,110]
+    else:
+        paint_color == [200, 200, 200]
     # Create mask from polygon:
     image_shape = img.shape[:2]
     mask = np.zeros(image_shape, dtype=np.uint8)
@@ -134,7 +140,19 @@ def process_polygon_into_mask(polygon, lanetype, img, road_color):
     if ln_style == "solid":
         return mask
     elif ln_dir == "parallel" and ln_style == "dashed":
-        mask = refine_mask_by_color_distance(mask, img, road_color, tolerance=50)
+        bw_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        blurred_img = cv2.GaussianBlur(bw_img, (5,5), 0)
+
+        masked_img = cv2.bitwise_and(blurred_img, blurred_img, mask=mask)
+        masked_pixels = masked_img[mask > 0]
+
+        o_val, _ = cv2.threshold(
+            masked_pixels, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
+
+        thresholded_mask = np.where(masked_img >= o_val, 255, 0).astype(np.uint8)
+
+        mask = thresholded_mask
     # mask = refine_mask_by_color_distance(mask, img, road_color, tolerance=50)
     return mask
 
@@ -158,7 +176,6 @@ def extract_annotations(index):
     
     img_path = os.path.join(image_dir, image_files[index])
     json_path = os.path.join(json_dir, json_files[index])
-    segmaps_path = os.path.join(segmaps_dir, segmaps_files[index])
 
     try:
         img = cv2.imread(img_path)
@@ -166,8 +183,6 @@ def extract_annotations(index):
     except:
         img = np.ones((800, 1200, 3), dtype=np.uint8) * 255  # Default white image if loading fails
     
-    segmap_mask = cv2.imread(segmaps_path)
-    segmap_mask = cv2.cvtColor(segmap_mask, cv2.COLOR_BGR2RGB)
 
     # Load JSON annotations
     with open(json_path, "r") as f:
@@ -182,17 +197,11 @@ def extract_annotations(index):
     # Get polygons from lane markings
     polygons = sort_through_lines_to_find_matches(objects)
 
-    # Get median road color
-    road_mask_val = (128, 64, 128)
-    rgb_array = np.array(road_mask_val, dtype=np.uint8)
-    road_mask = np.all(segmap_mask == rgb_array, axis=2).astype(np.uint8) * 255
-    road_pixels = img[road_mask > 0]
-    road_color = np.median(road_pixels, axis=0)
-
     masks = []
     for polygon, lane_type in polygons.items():
+        lane_color = lane_type
         masks.append(
-            process_polygon_into_mask(polygon, lane_type, img, road_color)
+            process_polygon_into_mask(polygon, lane_type, img)
         )
     
     # Combine all masks:
