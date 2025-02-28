@@ -40,18 +40,23 @@ def visualize_learning_curve(history, save_path, timestamp=""):
     fn = os.path.join(save_path, f"learning_curve_{timestamp}.png")
     plt.savefig(fn, bbox_inches='tight')
     plt.close()
+    print(f"   Learning curve saved to {fn}")
 
     # save history for future use:
     fn = os.path.join(save_path, f"learning_history_{timestamp}.json")
     with open(fn, "w") as file:
         json.dump(history, file, indent=4)
+    print(f"   Learning history saved to {fn}")
 
 
-def generate_dataloader(image_dir, mask_dir, preprocess_config, batch_size, num_workers, shuffle=True):
+def generate_dataloader(image_dir, mask_dir, preprocess_config, batch_size, num_workers, shuffle=True, img_transform=None):
 
     # get required image transformation object
     resize_width, resize_height = preprocess_config["resize_width"], preprocess_config["resize_height"]
-    image_transformations = get_img_transform(resize_height=resize_height, resize_width=resize_width)
+    if img_transform is None:
+        image_transformations = get_img_transform(resize_height=resize_height, resize_width=resize_width)
+    else:
+        image_transformations = img_transform
 
     label_map = None
     if preprocess_config["RGB_mask"]:
