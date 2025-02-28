@@ -1,10 +1,37 @@
+enable_cuda: TRUE
+
 model:
-  in_channels: 3
-  out_channels: 1 # Leave this one for binary segmentation, Change to 2 if we're segmentign dashed lines and solid lines separately
+    in_channels: 3
+    out_channels: 1  # Leave this one for binary segmentation, Change to 2 if we're segmentation dashed lines and solid lines separately
 
-training: # Placeholder hyperparameters
-  num_epochs: 100  
-  learning_rate: 0.1
-  batch_size: 64
+# Placeholder hyperparameters
+training:
+    num_epochs: 2
+    learning_rate: 0.1
+    batch_size: 1
+    num_workers: 2               # for torch.utils.data.DataLoader
+    resume_checkpoint: null      # should be path for checkpoint .pth file or null
+    save_checkpoint_freq: 5      # freq to save checkpoint wrt to epoch count. Set to 0 if no check points needs to saved
 
-# TODO: Add the image_dir and mask_dir paths here?
+# dataset preprocessing
+dataset_preprocessing:
+    resize_width: 1280
+    resize_height: 720
+    RGB_mask: TRUE                                 # set true if mask in dataset is RGB and not grayscale
+    RGB_labelmap: configs/kaggle_road_seg.json     # required if RGB_mask is TRUE
+    one_hot_mask: FALSE
+    num_classes: 2                # 2 for binary segmentation 0-background, 1-object
+
+# dataset path assume segmentation/ is cwd
+dataset_loc:
+    train:
+        img_dir: data/archive/train/images
+        mask_dir: data/archive/train/masks
+    val:
+        img_dir: data/archive/valid/images
+        mask_dir: data/archive/valid/masks
+
+    # add dataset class name maybe in future if required
+
+# location where model train results needs to be saved
+results_loc: experiment_results/
