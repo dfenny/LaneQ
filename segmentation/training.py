@@ -156,7 +156,8 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
     # plot learning curve and save history
     visualize_learning_curve(history=history, save_path=train_log_path, timestamp=timestamp)
 
-    print(f"Training Completed! Total time: {round((main_toc-main_toc)/60, 4)} min")
+    print(f"Model saved at: {path}")
+    print(f"Training Completed! Total time: {round((main_toc-main_tic)/60, 4)} min")
 
 
 def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True):
