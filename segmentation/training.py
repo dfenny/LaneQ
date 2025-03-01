@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
 from torchmetrics.segmentation import MeanIoU
+from tqdm.notebook import tqdm
 
 from models import get_model
 from utils.dataset import SegmentationDataset
@@ -104,7 +105,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         # update weights using training data
         model.train()
         running_train_loss = 0
-        for i, (batch_img, batch_mask) in enumerate(train_loader):
+        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"epoch: {epoch}")):
             batch_img = batch_img.to(DEVICE)
             batch_mask = batch_mask.to(DEVICE)
 
