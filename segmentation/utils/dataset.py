@@ -18,7 +18,7 @@ class SegmentationDataset(Dataset):
         self.transform = img_transform
 
         # get all filenames in given dataset location
-        self.file_names = sorted(os.listdir(image_dir))[:5]
+        self.file_names = sorted(os.listdir(image_dir))
 
         if mask_reshape is not None and (not isinstance(mask_reshape, tuple)):
             raise ValueError("mask_reshape should be tuple of (width, height)")
