@@ -12,5 +12,5 @@ existing_models = {
 
 def get_model(model_name, **kwargs):
     if model_name.lower() not in existing_models:
-        raise ValueError(f"Model '{model_name}' han't been implemented. Choose one of: {list(existing_models.keys())} instead.")
+        raise ValueError(f"Model '{model_name}' hasn't been implemented. Choose one of: {list(existing_models.keys())} instead.")
     return existing_models[model_name.lower()](**kwargs)
