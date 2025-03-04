@@ -46,8 +46,6 @@ def plot_image_and_annotations(img, objects, polygons, mask, index):
 
     # ax.legend(handles=legend_handles, loc="upper right", fontsize=8, title="Lane Markings")
 
-    # masked_img = img.copy()
-    # masked_img = np.where(mask, )
     ax.set_title(f"Image {index+1}/{len(image_files)}: {image_files[index]}")
     ax.set_xticks([])
     ax.set_yticks([])
