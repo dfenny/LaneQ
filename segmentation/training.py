@@ -1,76 +1,274 @@
+import os
+import yaml
+import time
+import json
+import argparse
+
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
-from utils.dataset import SegmentationDataset
-import argparse
-from models import get_model
-import yaml
+from torchmetrics.segmentation import MeanIoU
+from tqdm.notebook import tqdm
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from models import get_model
+from utils.dataset import SegmentationDataset
+from utils.preprocessing import get_img_transform
+
+
+# global variable
+DEVICE = "cpu"
+
 
 # Helper function to load the hyperparameters from a YAML file
 def load_config(config_path):
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
-# Parsing the command line arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default='unet', help='Model architecture to use')
-parser.add_argument('--config', type=str, default='configs/unet.yaml', help='Path to the config file of the model being trained')
-parser.add_argument('--checkpoint', type=str, default=None, help='Path to the checkpoint file to resume training or to fine tune the model')
-args = parser.parse_args()
 
-# Loading the hyperparameters from the YAML file
-model_config = load_config(args.config)
+def visualize_learning_curve(history, save_path, timestamp=""):
 
-in_channels = model_config['model']['in_channels']
-out_channels = model_config['model']['out_channels']
+    plt.figure()
+    plt.plot(history["train_loss"], label="train loss")
+    plt.plot(history["val_loss"], label="val loss")
+    plt.xlabel("epochs")
+    plt.ylabel("loss")
+    plt.legend()
+    plt.title("Training loss")
 
-num_epochs = model_config['training']['num_epochs']
-learning_rate = model_config['training']['learning_rate']
-batch_size = model_config['training']['batch_size']
+    fn = os.path.join(save_path, f"learning_curve_{timestamp}.png")
+    plt.savefig(fn, bbox_inches='tight')
+    plt.close()
+    print(f"   Learning curve saved to {fn}")
 
-# Creating the PyTorch DataLoader
-train_dataset = SegmentationDataset(image_dir='data/images/train', mask_dir='data/masks/train') # Again, the paths are just placeholders as mentioned in the data directory README
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) 
+    # save history for future use:
+    fn = os.path.join(save_path, f"learning_history_{timestamp}.json")
+    with open(fn, "w") as file:
+        json.dump(history, file, indent=4)
+    print(f"   Learning history saved to {fn}")
 
-# Create DataLoader for validation set
-val_dataset = SegmentationDataset(image_dir='data/images/val', mask_dir='data/masks/val') # Again, the paths are just placeholders as mentioned in the data directory README
-val_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True) 
 
-# Initializing the model, loss function, and the optimizer
-model = get_model(args.model, in_channels=in_channels, out_channels=out_channels).to(device)
-criterion = nn.BCELoss()  # Apparently this is the loss function to use for binary segmentation tasks. But I'm not sure if it's the best one (Use BCEWithLogitsLoss() if torch.forward() doesn't have a sigmoid layer)
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+def generate_dataloader(image_dir, mask_dir, preprocess_config, batch_size, num_workers, shuffle=True, img_transform=None):
 
-# Loading the checkpoint if provided
-if args.checkpoint:
-    model.load_state_dict(torch.load(args.checkpoint))
+    # get required image transformation object
+    resize_width, resize_height = preprocess_config["resize_width"], preprocess_config["resize_height"]
+    if img_transform is None:
+        image_transformations = get_img_transform(resize_height=resize_height, resize_width=resize_width)
+    else:
+        image_transformations = img_transform
 
-# Training loop
-for epoch in range(num_epochs):
-    
-    model.train()
-    running_loss = 0.0
-    
-    for batch in train_loader:
+    label_map = None
+    if preprocess_config["RGB_mask"]:
+        try:
+            with open(preprocess_config["RGB_labelmap"], 'r') as json_file:
+                label_map = json.load(json_file)
+        except:
+            print("Error loading labelmap")
+            label_map = None
 
-        images = batch['image'].to(device)
-        masks = batch['mask'].to(device)
+    # initialize dataset object
+    dataset = SegmentationDataset(image_dir=image_dir, mask_dir=mask_dir,
+                                  rgb_mask=preprocess_config["RGB_mask"], rgb_label_map=label_map,
+                                  img_transform=image_transformations,
+                                  mask_reshape=(resize_width, resize_height),
+                                  one_hot_target=preprocess_config["one_hot_mask"],
+                                  num_classes=preprocess_config["num_classes"])
 
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, masks)
-        loss.backward()
-        optimizer.step()
+    # generate dataloader
+    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    return dataloader, len(dataset)
 
-        running_loss += loss.item() * images.size(0)
-    
-    epoch_loss = running_loss / len(train_loader.dataset)
-    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}")
 
-    # TODO: Add extras like validation loop and more importantly checkpointing.
-    
-# Saving the model
-torch.save(model.state_dict(), f"checkpoints/{args.model}/{args.model}_final.pth")
+def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, save_path=".", checkpoint_freq=0):
+
+    global DEVICE
+
+    # ensure all necessary folders are available
+    checkpoint_path = os.path.join(save_path, "checkpoints")
+    os.makedirs(checkpoint_path, exist_ok=True)
+    train_log_path = os.path.join(save_path, "train_log")
+    os.makedirs(train_log_path, exist_ok=True)
+
+    # initialize variables
+    total_train_batch = len(train_loader)
+    total_val_batch = len(val_loader)
+    history = {"train_loss": [], "val_loss": []}
+
+    # start training
+    print("Training Started...")
+    main_tic = time.time()
+    for epoch in range(num_epochs):
+
+        epoch_tic = time.time()
+        # update weights using training data
+        model.train()
+        running_train_loss = 0
+        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"epoch: {epoch}")):
+            batch_img = batch_img.to(DEVICE)
+            batch_mask = batch_mask.to(DEVICE)
+
+            optimizer.zero_grad()               # set gradients to zero
+            logits = model(batch_img)
+            loss = loss_fn(logits, batch_mask)
+            loss.backward()                     # calculate gradients
+            optimizer.step()                    # take a step in optimization process
+            running_train_loss += loss.item()
+
+        epoch_train_loss = running_train_loss / total_train_batch   # average loss
+
+        # check performance on validation set
+        model.eval()  # Set the model to evaluation mode
+        running_val_loss = 0
+        with torch.no_grad():       # ensures that no gradients are computed
+
+            for i, (batch_img, batch_mask) in enumerate(val_loader):
+                batch_img = batch_img.to(DEVICE)
+                batch_mask = batch_mask.to(DEVICE)
+
+                logits = model(batch_img)
+                loss = loss_fn(logits, batch_mask)
+                running_val_loss += loss.item()
+
+        epoch_val_loss = running_val_loss / total_val_batch     # average loss
+
+        # store to plot learning curve
+        history["train_loss"].append(epoch_train_loss)
+        history["val_loss"].append(epoch_val_loss)
+
+        epoch_toc = time.time()
+
+        print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f}, "
+              f"Epoch execution time: {round(epoch_toc - epoch_tic, 2)} sec")
+
+        if checkpoint_freq > 0 and (epoch+1) % checkpoint_freq == 0:
+            path = os.path.join(checkpoint_path, f"unet_checkpoint_epoch_{epoch+1}.pth")
+            torch.save(model.state_dict(), path)
+
+    # Saving the final model
+    current_time = time.localtime()    # Get current time
+    timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', current_time)   # Format as 'YYYY-MM-DD_HH-MM-SS'
+    path = os.path.join(checkpoint_path, f"unet_final_{timestamp}.pth")
+    torch.save(model.state_dict(), path)
+    main_toc = time.time()
+
+    # plot learning curve and save history
+    visualize_learning_curve(history=history, save_path=train_log_path, timestamp=timestamp)
+
+    print(f"Model saved at: {path}")
+    print(f"Training Completed! Total time: {round((main_toc-main_tic)/60, 4)} min")
+
+
+def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True):
+
+    global DEVICE
+    meanIoU = MeanIoU(num_classes=num_classes, per_class=per_class, include_background=True, input_format='one-hot')
+    meanIoU = meanIoU.to(DEVICE)
+
+    model.eval()
+    with torch.no_grad():  # ensures that no gradients are computed
+        for batch_img, batch_mask in data_loader:
+            batch_img = batch_img.to(DEVICE)      # shape (batch size, num class, height, width)
+            batch_mask = batch_mask.to(DEVICE)    # shape (batch size, num class, height, width)
+            logits = model(batch_img)
+
+            if logits.shape[1] == 1:   # if only 1 class  binary segmentation
+                # Apply sigmoid to logits to get probabilities, then threshold to get binary class labels
+                pred = torch.sigmoid(logits)          # Sigmoid for binary classification
+                pred_labels = (pred > 0.5).float()    # Convert to 0 or 1 based on threshold
+
+            # multi-class segmentation
+            else:
+                prob = F.softmax(logits, dim=1)              # convert to probs
+                pred_labels = torch.argmax(prob, dim=1)      # convert to labels
+                pred_labels = F.one_hot(pred_labels, num_classes=2)   # convert to one hot
+
+            # Compute IoU for the current batch
+            meanIoU.update(pred_labels.long(), batch_mask.long())
+
+        # Calculate final estimate of meanIoU over entire dataset
+        mIoU_score = meanIoU.compute()
+        mIoU_score = mIoU_score.cpu().numpy()
+
+    return mIoU_score
+
+
+def main(model_name, config):
+
+    global DEVICE
+
+    # ensure all necessary folders are available
+    os.makedirs(config["results_loc"], exist_ok=True)
+
+    # get required config parameters
+    model_config = config["model"]
+    train_config = config["training"]
+    dataset_config = config["dataset_loc"]
+    preprocess_config = config["dataset_preprocessing"]
+
+    if config["enable_cuda"]:
+        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Using DEVICE: {DEVICE}")
+
+    # generate train data loader
+    train_loader, train_size = generate_dataloader(image_dir=dataset_config["train"]["img_dir"],
+                                                   mask_dir=dataset_config["train"]["mask_dir"],
+                                                   preprocess_config=preprocess_config,
+                                                   batch_size=train_config["batch_size"],
+                                                   num_workers=train_config["num_workers"])
+
+    # generate validation data loader
+    val_loader, val_size = generate_dataloader(image_dir=dataset_config["train"]["img_dir"],
+                                               mask_dir=dataset_config["train"]["mask_dir"],
+                                               preprocess_config=preprocess_config,
+                                               batch_size=train_config["batch_size"],
+                                               num_workers=train_config["num_workers"])
+
+    print(f"Train Dataset loaded. #samples: {train_size}")
+    print(f"Validation Dataset loaded. #samples: {val_size}")
+
+    # Initializing the model, loss function, and the optimizer
+    model = get_model(model_name, in_channels=model_config['in_channels'], out_channels=model_config['out_channels'])
+    model = model.to(DEVICE)
+
+    # Apparently this is the loss function to use for binary segmentation tasks.
+    # But I'm not sure if it's the best one (Use BCEWithLogitsLoss() if torch.forward() doesn't have a sigmoid layer)
+    # Using BCEWithLogitsLoss() as read in a blog that its numerically stable to use
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.Adam(model.parameters(), lr=train_config["learning_rate"])
+
+    checkpoint_path = train_config["resume_checkpoint"]
+    if checkpoint_path is not None:
+        model.load_state_dict((torch.load(checkpoint_path, weights_only=True)))
+
+    # train the model
+    train_loop(model=model, loss_fn=criterion, optimizer=optimizer,
+               train_loader=train_loader, val_loader=val_loader,
+               num_epochs=train_config["num_epochs"], save_path=config["results_loc"],
+               checkpoint_freq=train_config["save_checkpoint_freq"])
+
+    # Evaluate model performance at end of training using mIoU
+    print("Calculating Mean IoU Score (per class) ...")
+    train_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"])
+    val_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"])
+    print("Train mIoU Score:", train_mIoU)
+    print("Val mIoU Score:", val_mIoU)
+
+
+if __name__ == '__main__':
+
+    # Parsing the command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='unet', help='Model architecture to use')
+    parser.add_argument('--config', type=str, default='configs/unet.yaml',
+                        help='Path to the config file of the model being trained')
+    parser.add_argument('--checkpoint', type=str, default=None,
+                        help='Path to the checkpoint file to resume training or to fine tune the model')
+    args = parser.parse_args()
+
+    # Loading the hyperparameters from the YAML file
+    config = load_config(args.config)
+
+    # start training
+    main(model_name=args.model, config=config)
