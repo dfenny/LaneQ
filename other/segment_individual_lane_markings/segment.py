@@ -13,12 +13,10 @@ import matplotlib.pyplot as plt
 # Directory paths
 image_dir = os.path.expanduser("~/Downloads/bdd100k_images/train/")
 json_dir = os.path.expanduser("~/Downloads/bdd100k_annotations/train/")
-segmaps_dir = os.path.expanduser("~/Downloads/bdd100k_seg_maps/color_labels/train")
 
 # Get all images
 image_files = sorted([f for f in os.listdir(image_dir) if f.endswith(".jpg")])
 json_files = sorted([f for f in os.listdir(json_dir) if f.endswith(".json")])
-segmaps_files = sorted([f for f in os.listdir(segmaps_dir) if f.endswith(".png")])
 
 lane_colors = {
     # "lane/crosswalk": "blue",
