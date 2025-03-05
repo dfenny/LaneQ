@@ -179,10 +179,16 @@ def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True, foregroun
                 pred_labels = (pred > foreground_th).float()    # Convert to 0 or 1 based on threshold  # (b, 1, h, w)
                 pred_labels = pred_labels.squeeze(dim=1)        # (b, h, w)
 
+                # accordingly update the batch_mask shape as well (done to ensure consistent input shape to meanIoU)
+                batch_mask = batch_mask.squeeze(dim=1)        # (b, 1, h, w) -> (b, h, w)
+
             # multi-class segmentation
             else:
-                prob = F.softmax(logits, dim=1)              # convert to probs    # (b, c, h, w)
-                pred_labels = torch.argmax(prob, dim=1)      # convert to labels   # (b, h, w)
+                prob = F.softmax(logits, dim=1)                 # convert to probs    # (b, c, h, w)
+                pred_labels = torch.argmax(prob, dim=1)         # convert to labels   # (b, h, w)
+
+                # accordingly update the batch_mask shape as well (done to ensure consistent input shape to meanIoU)
+                batch_mask = torch.argmax(batch_mask, dim=1)    # one hot to label (b, c, h, w) -> (b, h, w)
 
             # Compute IoU for the current batch
             meanIoU.update(pred_labels.long(), batch_mask.long())
