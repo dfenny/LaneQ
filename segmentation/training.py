@@ -105,7 +105,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         # update weights using training data
         model.train()
         running_train_loss = 0
-        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch} train - ")):
+        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch+1} train - ")):
             batch_img = batch_img.to(DEVICE)
             batch_mask = batch_mask.to(DEVICE)
 
@@ -123,7 +123,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         running_val_loss = 0
         with torch.no_grad():       # ensures that no gradients are computed
 
-            for i, (batch_img, batch_mask) in enumerate(tqdm(val_loader, desc=f"Epoch: {epoch} val - ")):
+            for i, (batch_img, batch_mask) in enumerate(tqdm(val_loader, desc=f"Epoch: {epoch+1} val - ")):
                 batch_img = batch_img.to(DEVICE)
                 batch_mask = batch_mask.to(DEVICE)
 
