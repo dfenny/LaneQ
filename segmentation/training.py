@@ -257,9 +257,9 @@ def main(model_name, config):
     # Evaluate model performance at end of training using mIoU
     print("Calculating Mean IoU Score (per class) ...")
     train_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"],
-                                   foreground_th=config['inference']["foreground_th"])
+                                   foreground_th=config['inference']["foreground_threshold"])
     val_mIoU = cal_MeanIoU_score(model=model, data_loader=val_loader, num_classes=preprocess_config["num_classes"],
-                                 foreground_th=config['inference']["foreground_th"])
+                                 foreground_th=config['inference']["foreground_threshold"])
     print("Train mIoU Score:", train_mIoU)
     print("Val mIoU Score:", val_mIoU)
 
