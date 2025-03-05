@@ -1,4 +1,5 @@
 import os
+import random
 import cv2
 import numpy as np
 import torch
@@ -11,7 +12,7 @@ from .preprocessing import load_image, load_mask, apply_img_preprocessing, resiz
 class SegmentationDataset(Dataset):
 
     def __init__(self, image_dir, mask_dir, img_transform=None, mask_reshape=None, rgb_mask=False, rgb_label_map=None,
-                 one_hot_target=False, num_classes=2):
+                 one_hot_target=False, num_classes=2, subset_size=None):
 
         self.image_dir = image_dir
         self.mask_dir = mask_dir
@@ -19,6 +20,10 @@ class SegmentationDataset(Dataset):
 
         # get all filenames in given dataset location
         self.file_names = sorted(os.listdir(image_dir))
+        if subset_size is not None:
+            # randomly select subset
+            k = min(len(self.file_names), subset_size)
+            self.file_names = random.sample(self.file_names, k)
 
         if mask_reshape is not None and (not isinstance(mask_reshape, tuple)):
             raise ValueError("mask_reshape should be tuple of (width, height)")
