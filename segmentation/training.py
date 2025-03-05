@@ -105,7 +105,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         # update weights using training data
         model.train()
         running_train_loss = 0
-        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"epoch: {epoch}")):
+        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch} train - ")):
             batch_img = batch_img.to(DEVICE)
             batch_mask = batch_mask.to(DEVICE)
 
@@ -123,7 +123,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         running_val_loss = 0
         with torch.no_grad():       # ensures that no gradients are computed
 
-            for i, (batch_img, batch_mask) in enumerate(val_loader):
+            for i, (batch_img, batch_mask) in enumerate(tqdm(val_loader, desc=f"Epoch: {epoch} val - ")):
                 batch_img = batch_img.to(DEVICE)
                 batch_mask = batch_mask.to(DEVICE)
 
@@ -140,7 +140,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         epoch_toc = time.time()
 
         print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f}, "
-              f"Epoch execution time: {round(epoch_toc - epoch_tic, 2)} sec")
+              f"Epoch execution time: {round((epoch_toc-epoch_tic)/60, 2)} min")
 
         if checkpoint_freq > 0 and (epoch+1) % checkpoint_freq == 0:
             path = os.path.join(checkpoint_path, f"unet_checkpoint_epoch_{epoch+1}.pth")
@@ -160,10 +160,10 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
     print(f"Training Completed! Total time: {round((main_toc-main_tic)/60, 4)} min")
 
 
-def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True):
+def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True, foreground_th=0.5):
 
     global DEVICE
-    meanIoU = MeanIoU(num_classes=num_classes, per_class=per_class, include_background=True, input_format='one-hot')
+    meanIoU = MeanIoU(num_classes=num_classes, per_class=per_class, include_background=True, input_format='index')
     meanIoU = meanIoU.to(DEVICE)
 
     model.eval()
@@ -171,18 +171,18 @@ def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True):
         for batch_img, batch_mask in data_loader:
             batch_img = batch_img.to(DEVICE)      # shape (batch size, num class, height, width)
             batch_mask = batch_mask.to(DEVICE)    # shape (batch size, num class, height, width)
-            logits = model(batch_img)
+            logits = model(batch_img)             # shape (batch size, num class, height, width)
 
-            if logits.shape[1] == 1:   # if only 1 class  binary segmentation
+            if logits.shape[1] == 1:              # if only 1 class  binary segmentation
                 # Apply sigmoid to logits to get probabilities, then threshold to get binary class labels
-                pred = torch.sigmoid(logits)          # Sigmoid for binary classification
-                pred_labels = (pred > 0.5).float()    # Convert to 0 or 1 based on threshold
+                pred = torch.sigmoid(logits)                    # Sigmoid for binary classification     # (b, 1, h, w)
+                pred_labels = (pred > foreground_th).float()    # Convert to 0 or 1 based on threshold  # (b, 1, h, w)
+                pred_labels = pred_labels.squeeze(dim=1)        # (b, h, w)
 
             # multi-class segmentation
             else:
-                prob = F.softmax(logits, dim=1)              # convert to probs
-                pred_labels = torch.argmax(prob, dim=1)      # convert to labels
-                pred_labels = F.one_hot(pred_labels, num_classes=2)   # convert to one hot
+                prob = F.softmax(logits, dim=1)              # convert to probs    # (b, c, h, w)
+                pred_labels = torch.argmax(prob, dim=1)      # convert to labels   # (b, h, w)
 
             # Compute IoU for the current batch
             meanIoU.update(pred_labels.long(), batch_mask.long())
@@ -219,8 +219,8 @@ def main(model_name, config):
                                                    num_workers=train_config["num_workers"])
 
     # generate validation data loader
-    val_loader, val_size = generate_dataloader(image_dir=dataset_config["train"]["img_dir"],
-                                               mask_dir=dataset_config["train"]["mask_dir"],
+    val_loader, val_size = generate_dataloader(image_dir=dataset_config["val"]["img_dir"],
+                                               mask_dir=dataset_config["val"]["mask_dir"],
                                                preprocess_config=preprocess_config,
                                                batch_size=train_config["batch_size"],
                                                num_workers=train_config["num_workers"])
@@ -250,8 +250,10 @@ def main(model_name, config):
 
     # Evaluate model performance at end of training using mIoU
     print("Calculating Mean IoU Score (per class) ...")
-    train_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"])
-    val_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"])
+    train_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"],
+                                   foreground_th=model_config["foreground_th"])
+    val_mIoU = cal_MeanIoU_score(model=model, data_loader=val_loader, num_classes=preprocess_config["num_classes"],
+                                 foreground_th=model_config["foreground_th"])
     print("Train mIoU Score:", train_mIoU)
     print("Val mIoU Score:", val_mIoU)
 
