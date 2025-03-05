@@ -3,6 +3,8 @@ enable_cuda: TRUE
 model:
     in_channels: 3
     out_channels: 1  # Leave this one for binary segmentation, Change to 2 if we're segmentation dashed lines and solid lines separately
+
+inference:     # temporary
     foreground_threshold: 0.5   # threshold to be used for binary classification. Ignore otherwise
 
 # Placeholder hyperparameters
