@@ -174,8 +174,14 @@ cython_debug/
 segmentation/data/*
 !segmentation/data/README.md
 
-# to ignore all files under data folder except README.md
+# to ignore all files under segementation/experiment_results folder except README.md
 segmentation/experiment_results/*
 !segmentation/experiment_results/README.md
 
+
+# to ignore all files under degradation_calculation/output folder except README.md
+degradation _calculation/output/*
+!degradation _calculation/output/README.md
+
 **/.DS_Store
+
