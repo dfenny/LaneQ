@@ -2,25 +2,25 @@ enable_cuda: TRUE
 
 model:
     in_channels: 3
-    out_channels: 1
+    out_dim: 1
 
 # Placeholder hyperparameters
 training:
-    num_epochs: 10
+    num_epochs: 2
     learning_rate: 0.05
     batch_size: 1
     num_workers: 2               # for torch.utils.data.DataLoader
     resume_checkpoint: null      # should be path for checkpoint .pth file or null
-    save_checkpoint_freq: 5      # freq to save checkpoint wrt to epoch count. Set to 0 if no check points needs to saved
+    save_checkpoint_freq: 1      # freq to save checkpoint wrt to epoch count. Set to 0 if no check points needs to saved
 
 # dataset path assume segmentation/ is cwd
 dataset_loc:
     train:
-        img_dir: 
-        degradation_values_dir: 
+        img_dir: ../damage_ratio_calc_data/segmented_objects/183_jpg.rf.c3a79aad316f75fe23536c3bbbd6da51
+        degradation_values_csv: ../damage_ratio_calc_data/segmented_objects/183_jpg.rf.c3a79aad316f75fe23536c3bbbd6da51_degradation_values.csv
     val:
-        img_dir: 
-        degradation_values_dir: 
+        img_dir: ../damage_ratio_calc_data/segmented_objects/184_jpg.rf.9edad8ca8d25dc9949b48968cca6e41c
+        degradation_values_csv: ../damage_ratio_calc_data/segmented_objects/184_jpg.rf.9edad8ca8d25dc9949b48968cca6e41c_degradation_values.csv
 
     # add dataset class name maybe in future if required
 
