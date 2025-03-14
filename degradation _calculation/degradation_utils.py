@@ -1,57 +1,80 @@
 import cv2
 import numpy as np
-from skimage.measure import label, regionprops
+from skimage.filters import threshold_otsu
+
+def get_roi_points():
+    # roi generation
+    push_top_corner_wrt_road_region = 0.35    # percentage of additional offset to top corners of roi
+    roi_side_slope_theta = 25            # slope angle in degree for slides of trapezoid roi
+
+    upper_line = 350    # set upper edge of ROI
+    lower_line = 720    # set base of ROI
+
+    start_col = 256    # set start point (in x) for roi
+    end_col = 1024     # set end point (in x) for roi
+
+    # calculate additional corner offset
+    roi_start, roi_end = start_col, end_col
+    if push_top_corner_wrt_road_region > 0:
+        offset = int(start_col * push_top_corner_wrt_road_region)
+        roi_start, roi_end = (start_col + offset), (end_col - offset)
+
+    # calculate x coordinate of lower corners of roi based on roi height and slope
+    roi_height = lower_line - upper_line
+    d = int(roi_height * np.tan(np.radians(90 - roi_side_slope_theta)))
+
+    # calculate 4 corners of ROI in order: tl, tr, br, bl
+    roi_points = [
+        (roi_start, upper_line),
+        (roi_end, upper_line),
+        (roi_end + d, lower_line),
+        (roi_start - d, lower_line)
+    ]
+    roi_points = np.array(roi_points)
+    return roi_points
 
 
-def generate_trapezoid_roi(img_shape, trap_height, trap_lower_width, trap_corner_offset, bottom_offset, center_offset=0):
-    """
-    Generate the coordinates of a symmetric trapezoidal region of interest (ROI) within an image.
-    This function calculates the four corner coordinates of a trapezoidal region within an image.
-    The trapezoid is defined by the following parameters: height, bottom width, corner offset, and bottom offset.
-    
-    Args:
-        img_shape (tuple): shape of the image, given as a tuple (height, width)
-        trap_height (int): The height of the trapezoid (distance between the top and bottom edges).
-        trap_lower_width (int): The width of the bottom side of the trapezoid.
-        trap_corner_offset (int): horizontal offset from the bottom corners to the top corners, effectively making the top of the trapezoid narrower.
-        bottom_offset (int): vertical distance from the bottom of the image to the lower edge of the trapezoid.
-        center_offset (int): additional horizontal offset to shift the entire trapezoid left or right. Defaults to 0, meaning no shift.
+def generate_connected_components(binary_img, connectivity=8):
 
-    Returns:
-        list: list of four tuples, each containing the (x, y) coordinates of a corner of the trapezoid in the following order:
-        top-left, top-right, bottom-right, bottom-left.
-    """
-    img_h, img_w = img_shape
-    center = img_w // 2  # get image center
+    # Perform connected component analysis
+    # The function returns:
+    #   num_labels: number of labels (including background)
+    #   labels: image where each pixel has a label number
+    #   stats: statistics for each label (e.g., bounding box, area)
+    #         -> top-left-x, top-left-y, width, height, area
+    #   centroids: center of each component
+    num_labels, label_mask, stats, centroids = cv2.connectedComponentsWithStats(binary_img, connectivity=connectivity)
 
-    # get horizontal levels for trapezoid
-    low_y = img_h - bottom_offset
-    top_y = low_y - trap_height
+    # keep only bounding box in stats
+    stats = stats[:, :-1]
 
-    # find x coord for lower corners of trapezoid
+    return num_labels, label_mask, stats
 
-    # cal offset from center
-    left_w = trap_lower_width // 2
-    right_w = trap_lower_width - left_w
 
-    # lower x corners
-    low_leftx = center - left_w
-    low_rightx = center + right_w
+def filter_connected_components(label_mask, roi_points, min_area=100, min_roi_overlap=0.6):
 
-    # find top x corner
-    top_leftx = low_leftx + trap_corner_offset
-    top_rightx = low_rightx - trap_corner_offset
+    # generate a ROI area mask to get pixels which are part of roi for transformation
+    inside_roi = np.zeros(label_mask.shape[:2])
+    inside_roi = cv2.fillPoly(inside_roi, pts=[roi_points], color=1).astype(np.uint8)
+    inside_roi = cv2.bitwise_and(label_mask, label_mask, mask=inside_roi)
 
-    # push RoI from center if required
-    if center_offset != 0:
-        low_leftx += center_offset
-        low_rightx += center_offset
-        top_leftx += center_offset
-        top_rightx += center_offset
+    # Calculate area(frequency) of labels in label_mask and inside_roi
+    label_count = len(np.unique(label_mask))
+    orig_area = np.bincount(label_mask.ravel(), minlength=label_count)
+    inside_roi_area = np.bincount(inside_roi.ravel(), minlength=label_count)
+    orig_area = np.delete(orig_area, 0)     # remove 0 for background
+    inside_roi_area = np.delete(inside_roi_area, 0)   # remove 0 for background
 
-    # corners in order: tl, tr, br, bl
-    trap_points = [(top_leftx, top_y) , (top_rightx, top_y), (low_rightx, low_y), (low_leftx, low_y)]
-    return trap_points
+    # Step: Create a mask for labels that meet the conditions
+    # Condition 1: Original area must be greater than min_area
+    # Condition 2: The ratio of area in ROI to the original area must be >= min_roi_overlap_area
+    valid_labels = (orig_area > min_area) & ((inside_roi_area / orig_area) >= min_roi_overlap)
+    labels = np.arange(1, label_count)
+    valid_labels = labels[valid_labels]    # get list of valid connect component labels
+
+    # set invalid labels/connected components to zero
+    label_mask = np.where(np.isin(label_mask, valid_labels), label_mask, 0)
+    return label_mask
 
 
 def generate_perspective_matrix(roi_pts, output_shape):
@@ -74,47 +97,28 @@ def apply_perspective_transform(img, matrix, output_shape, interpolation=cv2.INT
     return bev
 
 
-def generate_connected_components(binary_img, connectivity=2, closing=True, kernel=5):
+def cal_degradation_ratio(grayscale_img, component_mask, dilate_kernel=13):
 
-    if closing:
-        kernel = np.ones((kernel, kernel), np.uint8)              # Define the structuring element
-        binary_img = cv2.morphologyEx(binary_img, cv2.MORPH_CLOSE, kernel)    # Perform closing
+    # dilate the mask to include surrounding road region near lane marking for calculating threshold
+    kernel = np.ones((dilate_kernel, dilate_kernel))
+    dilated_mask = cv2.dilate(component_mask, kernel, iterations=1)
 
-    # find connected components
-    label_mask, label_count = label(binary_img, connectivity=connectivity, return_num=True)
-    return label_mask, label_count
+    # use this dialted region and apply otsu to find a good threshold to identify lane paint
+    temp = cv2.bitwise_and(grayscale_img, grayscale_img, mask=dilated_mask)
+    good_threshold = threshold_otsu(temp[temp > 0])  # use only non-zero intensities
 
+    # crop given component from the grayscale image using mask
+    component_region = cv2.bitwise_and(grayscale_img, grayscale_img, mask=component_mask)
 
-def cal_component_level_degradation(component_img, grayscale_img, good_threshold):
+    # find good intensity pixels
+    undegraded_region = (component_region >= good_threshold)
 
-    # store degradation ratio
-    degradation = []
-
-    label_count = len(np.unique(component_img))    # 0 is background
-    for l in range(1, label_count):
-
-        # filter single component
-        component_mask = (component_img == l).astype(np.uint8)
-
-        # crop segmented region for each component
-        component_region = cv2.bitwise_and(grayscale_img, grayscale_img, mask=component_mask)
-
-        # find good intensity pixels
-        undegraded_region = component_region >= good_threshold
-
-        # calculate degradation ratio
-        total_area = np.sum(component_mask)
-        undegraded_area = np.sum(undegraded_region)
-        degradation_ratio = 1 - (undegraded_area / total_area)
-        degradation_ratio = round(degradation_ratio, 4)
-
-        # calculate bbox for this component
-        bbox = regionprops(component_mask, cache=False)[0].bbox
-        bbox = [bbox[1], bbox[0], bbox[3], bbox[2]]    # ensure proper sequence (xmin, ymin, xmax, ymax)
-
-        degradation.append({"degradation": degradation_ratio, "bbox": bbox})
-
-    return degradation
+    # calculate degradation ratio
+    total_area = np.sum(component_mask)
+    undegraded_area = np.sum(undegraded_region)
+    degradation_ratio = 1 - (undegraded_area / total_area)
+    degradation_ratio = round(degradation_ratio, 4)
+    return degradation_ratio
 
 
 def add_bbox(img, bbox, label=None, bbox_color=(255, 255, 255), bbox_thickness=2, text_color=(0, 0, 0), font_scale=0.7):
@@ -153,86 +157,10 @@ def add_bbox(img, bbox, label=None, bbox_color=(255, 255, 255), bbox_thickness=2
     return img
 
 
-def get_bbox_corners(bbox):
-
-    xmin, ymin, xmax, ymax = bbox  # unpack
-    top_left = (xmin, ymin)
-    top_right = (xmax, ymin)
-    bottom_left = (xmin, ymax)
-    bottom_right = (xmax, ymax)
-
-    return top_left, top_right, bottom_right, bottom_left
-
-
-def apply_bbox_inv_perspective_transform(degradation, orig_matrix):
-
-    new_degradation = []
-
-    # Compute the inverse perspective transform matrix
-    matrix_inv = np.linalg.inv(orig_matrix)
-
-    for component in degradation:
-        ratio, bev_bbox = component["degradation"], component["bbox"]
-
-        # need all four corners to perform perspective transform
-        bbox_four = get_bbox_corners(bev_bbox)     # tl, tr, br, bl
-        bbox_four = np.float32(bbox_four)
-        bev_bbox = bbox_four.reshape(-1, 1, 2).astype(np.float32)    # reshape (N, 1, 2) format
-
-        # Transform all four corners back to the original perspective view
-        original_bbox = cv2.perspectiveTransform(bev_bbox, matrix_inv)     # (N, 1, 2)
-        original_bbox = np.int32(np.squeeze(original_bbox))                # (N, 2)
-
-        # above bbox is wrt to ROI, so also calculate bbox wrt image axes
-        xmin, ymin = np.min(original_bbox[:, 0]), np.min(original_bbox[:, 1])
-        xmax, ymax = np.max(original_bbox[:, 0]), np.max(original_bbox[:, 1])
-        normal_bbox = np.int32([xmin, ymin, xmax, ymax]).tolist()
-
-        new_degradation.append({"degradation": ratio, "bbox": normal_bbox, "oriented_bbox": original_bbox.tolist()})
-
-    return new_degradation
-
-
-_demo_settings = {
-
-    "b1d0091f-75824d0d.jpg": {
-        "roi_h": 280, "roi_lw": 1200, "rot_co": 440, "roi_bo": 0, "roi_ceo": 50,
-        "threshold": 100
-    },
-
-    "b1d4b62c-60aab822.jpg": {
-        "roi_h": 250, "roi_lw": 1280, "rot_co": 480, "roi_bo": 0, "roi_ceo": -60,
-        "threshold": 45
-    },
-
-    "b5b02b31-f19988fb.jpg": {
-        "roi_h": 300, "roi_lw": 1300, "rot_co": 480, "roi_bo": 50, "roi_ceo": 90,
-        "threshold": 100
-    },
-
-    "b1ebfc3c-740ec84a.jpg": {
-        "roi_h": 250, "roi_lw": 1300, "rot_co": 480, "roi_bo": 0, "roi_ceo": -60,
-        "threshold": 100
-    },
-
-    "b6bdb46e-3709d206.jpg": {
-        "roi_h": 250, "roi_lw": 1280, "rot_co": 480, "roi_bo": 0, "roi_ceo": -60,
-        "threshold": 180
-    },
-
-    "b1d22449-117aa773.jpg": {
-        "roi_h": 240, "roi_lw": 1280, "rot_co": 480, "roi_bo": 80, "roi_ceo": 30,
-        "threshold": 180
-    },
-
-    "191_jpg.rf.e27c030e763e58ce48964e670158b6e7.jpg": {
-        "roi_h": 340, "roi_lw": 850, "rot_co": 320, "roi_bo": 0, "roi_ceo": 60,
-        "threshold": 180
-    },
-
-    "184_jpg.rf.9edad8ca8d25dc9949b48968cca6e41c.jpg": {
-        "roi_h": 370, "roi_lw": 680, "rot_co": 200, "roi_bo": 0, "roi_ceo": 90,
-        "threshold": 160
-    }
-
-}
+def box_coco_to_corner(bbox):
+    """Convert from (upper-left, width, height) to (upper-left, bottom-right)"""
+    x1, y1, w, h = bbox
+    x2 = x1 + w
+    y2 = y1 + h
+    boxes = (x1, y1, x2, y2)
+    return boxes
