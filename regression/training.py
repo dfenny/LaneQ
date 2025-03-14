@@ -10,11 +10,11 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
-from torchmetrics.segmentation import MeanIoU
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm.notebook import tqdm
 
 from models import get_model
-from utils.dataset import SegmentationDataset
+from utils.dataset import RegressionDataset
 from utils.preprocessing import get_img_transform
 
 
@@ -50,31 +50,32 @@ def visualize_learning_curve(history, save_path, timestamp=""):
     print(f"   Learning history saved to {fn}")
 
 
-def generate_dataloader(image_dir, mask_dir, preprocess_config, batch_size, num_workers, shuffle=True, img_transform=None):
+def generate_basic_dataloader(image_dir, degradation_values_csv, preprocess_config, batch_size, num_workers, shuffle=True, transform=None):
 
     # get required image transformation object
     resize_width, resize_height = preprocess_config["resize_width"], preprocess_config["resize_height"]
-    if img_transform is None:
+    if transform is None:
         image_transformations = get_img_transform(resize_height=resize_height, resize_width=resize_width)
+        pass
     else:
-        image_transformations = img_transform
-
-    label_map = None
-    if preprocess_config["RGB_mask"]:
-        try:
-            with open(preprocess_config["RGB_labelmap"], 'r') as json_file:
-                label_map = json.load(json_file)
-        except:
-            print("Error loading labelmap")
-            label_map = None
+        image_transformations = transform
 
     # initialize dataset object
-    dataset = SegmentationDataset(image_dir=image_dir, mask_dir=mask_dir,
-                                  rgb_mask=preprocess_config["RGB_mask"], rgb_label_map=label_map,
-                                  img_transform=image_transformations,
-                                  mask_reshape=(resize_width, resize_height),
-                                  one_hot_target=preprocess_config["one_hot_mask"],
-                                  num_classes=preprocess_config["num_classes"])
+    dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv,
+                                transform=image_transformations)
+
+    # generate dataloader
+    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    return dataloader, len(dataset)
+
+
+def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_workers, shuffle=True, transform=None):
+
+    if transform is not None:
+        image_transformations = transform
+        
+    # initialize dataset object
+    dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv)
 
     # generate dataloader
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
@@ -105,13 +106,13 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         # update weights using training data
         model.train()
         running_train_loss = 0
-        for i, (batch_img, batch_mask) in enumerate(tqdm(train_loader, desc=f"epoch: {epoch}")):
-            batch_img = batch_img.to(DEVICE)
-            batch_mask = batch_mask.to(DEVICE)
+        for i, (batch_img, degradation_value) in enumerate(tqdm(train_loader, desc=f"epoch: {epoch}")):
+            batch_img = batch_img.to(torch.float32).to(DEVICE)
+            degradation_value = degradation_value.to(torch.float32).to(DEVICE)
 
             optimizer.zero_grad()               # set gradients to zero
             logits = model(batch_img)
-            loss = loss_fn(logits, batch_mask)
+            loss = loss_fn(logits, degradation_value)
             loss.backward()                     # calculate gradients
             optimizer.step()                    # take a step in optimization process
             running_train_loss += loss.item()
@@ -123,12 +124,12 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         running_val_loss = 0
         with torch.no_grad():       # ensures that no gradients are computed
 
-            for i, (batch_img, batch_mask) in enumerate(val_loader):
-                batch_img = batch_img.to(DEVICE)
-                batch_mask = batch_mask.to(DEVICE)
+            for i, (batch_img, degradation_value) in enumerate(val_loader):
+                batch_img = batch_img.to(torch.float32).to(DEVICE)
+                degradation_value = degradation_value.to(torch.float32).to(DEVICE)
 
                 logits = model(batch_img)
-                loss = loss_fn(logits, batch_mask)
+                loss = loss_fn(logits, degradation_value)
                 running_val_loss += loss.item()
 
         epoch_val_loss = running_val_loss / total_val_batch     # average loss
@@ -143,13 +144,13 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
               f"Epoch execution time: {round(epoch_toc - epoch_tic, 2)} sec")
 
         if checkpoint_freq > 0 and (epoch+1) % checkpoint_freq == 0:
-            path = os.path.join(checkpoint_path, f"unet_checkpoint_epoch_{epoch+1}.pth")
+            path = os.path.join(checkpoint_path, f"cnn_sppf_checkpoint_epoch_{epoch+1}.pth")
             torch.save(model.state_dict(), path)
 
     # Saving the final model
     current_time = time.localtime()    # Get current time
     timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', current_time)   # Format as 'YYYY-MM-DD_HH-MM-SS'
-    path = os.path.join(checkpoint_path, f"unet_final_{timestamp}.pth")
+    path = os.path.join(checkpoint_path, f"cnn_sppf_final_{timestamp}.pth")
     torch.save(model.state_dict(), path)
     main_toc = time.time()
 
@@ -160,39 +161,28 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
     print(f"Training Completed! Total time: {round((main_toc-main_tic)/60, 4)} min")
 
 
-def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True):
-
+def cal_regression_metrics(model, data_loader):
     global DEVICE
-    meanIoU = MeanIoU(num_classes=num_classes, per_class=per_class, include_background=True, input_format='one-hot')
-    meanIoU = meanIoU.to(DEVICE)
+    model.to(DEVICE).eval()
+    
+    y_true, y_pred = [], []
 
-    model.eval()
-    with torch.no_grad():  # ensures that no gradients are computed
-        for batch_img, batch_mask in data_loader:
-            batch_img = batch_img.to(DEVICE)      # shape (batch size, num class, height, width)
-            batch_mask = batch_mask.to(DEVICE)    # shape (batch size, num class, height, width)
-            logits = model(batch_img)
+    with torch.no_grad():
+        for batch_img, batch_target in data_loader:
+            batch_img = batch_img.to(torch.float32).to(DEVICE)
+            batch_target = batch_target.to(torch.float32).to(DEVICE)
 
-            if logits.shape[1] == 1:   # if only 1 class  binary segmentation
-                # Apply sigmoid to logits to get probabilities, then threshold to get binary class labels
-                pred = torch.sigmoid(logits)          # Sigmoid for binary classification
-                pred_labels = (pred > 0.5).float()    # Convert to 0 or 1 based on threshold
+            preds = model(batch_img)
+            # preds = preds.squeeze()  # To ensure shape is correct
 
-            # multi-class segmentation
-            else:
-                prob = F.softmax(logits, dim=1)              # convert to probs
-                pred_labels = torch.argmax(prob, dim=1)      # convert to labels
-                pred_labels = F.one_hot(pred_labels, num_classes=2)   # convert to one hot
+            y_true.extend(batch_target.cpu().numpy())
+            y_pred.extend(preds.cpu().numpy())
 
-            # Compute IoU for the current batch
-            meanIoU.update(pred_labels.long(), batch_mask.long())
+    mse = mean_squared_error(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
 
-        # Calculate final estimate of meanIoU over entire dataset
-        mIoU_score = meanIoU.compute()
-        mIoU_score = mIoU_score.cpu().numpy()
-
-    return mIoU_score
-
+    return {"MSE": mse, "MAE": mae, "R2": r2}
 
 def main(model_name, config):
 
@@ -232,10 +222,8 @@ def main(model_name, config):
     model = get_model(model_name, in_channels=model_config['in_channels'], out_channels=model_config['out_channels'])
     model = model.to(DEVICE)
 
-    # Apparently this is the loss function to use for binary segmentation tasks.
-    # But I'm not sure if it's the best one (Use BCEWithLogitsLoss() if torch.forward() doesn't have a sigmoid layer)
-    # Using BCEWithLogitsLoss() as read in a blog that its numerically stable to use
-    criterion = nn.BCEWithLogitsLoss()
+    # Using Mean Squared Error Loss
+    criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=train_config["learning_rate"])
 
     checkpoint_path = train_config["resume_checkpoint"]
@@ -248,20 +236,20 @@ def main(model_name, config):
                num_epochs=train_config["num_epochs"], save_path=config["results_loc"],
                checkpoint_freq=train_config["save_checkpoint_freq"])
 
-    # Evaluate model performance at end of training using mIoU
-    print("Calculating Mean IoU Score (per class) ...")
-    train_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"])
-    val_mIoU = cal_MeanIoU_score(model=model, data_loader=train_loader, num_classes=preprocess_config["num_classes"])
-    print("Train mIoU Score:", train_mIoU)
-    print("Val mIoU Score:", val_mIoU)
+    # Evaluate model performance at end of training using the metrics I defined before
+    print("Calculating Regression Metrics ...")
+    train_metrics = cal_regression_metrics(model=model, data_loader=train_loader)
+    val_metrics = cal_regression_metrics(model=model, data_loader=val_loader)
+    print("Train Metrics:", train_metrics)
+    print("Val Metrics:", val_metrics)
 
 
 if __name__ == '__main__':
 
     # Parsing the command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='unet', help='Model architecture to use')
-    parser.add_argument('--config', type=str, default='configs/unet.yaml',
+    parser.add_argument('--model', type=str, default='cnn_sppf', help='Model architecture to use')
+    parser.add_argument('--config', type=str, default='configs/cnn.yaml',
                         help='Path to the config file of the model being trained')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='Path to the checkpoint file to resume training or to fine tune the model')

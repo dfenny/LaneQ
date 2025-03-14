@@ -12,7 +12,7 @@ def load_saved_model(model_name, saved_weight_path,  **kwargs):
     return model
 
 
-def pred_segmentation_mask(model, test_img, img_transform=None, add_batch_dim=False, pos_threshold=0.5,
+def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=False, pos_threshold=0.5,
                            device=torch.device("cpu")):
 
     # ensure model is on same device as test data
@@ -23,23 +23,11 @@ def pred_segmentation_mask(model, test_img, img_transform=None, add_batch_dim=Fa
     if add_batch_dim:
         test_batch = test_batch.unsqueeze(0)       # (b, 3, h, w)
 
-    # Perform inference
     model.eval()
     with torch.no_grad():
         test_batch = test_batch.to(device)
-        logits = model(test_batch)            # (b, c, h, w)
+        output = model(test_batch)
 
-        if logits.shape[1] == 1:              # if only 1 class  binary segmentation
-            # Apply sigmoid to logits to get probabilities, then threshold to get binary class labels
-            pred = torch.sigmoid(logits)  # Sigmoid for binary classification      # (b, c, h, w)
-            pred_labels = (pred > pos_threshold).float()  # Convert to 0 or 1 based on threshold    # (b, 1, h, w)
-            pred_labels = pred_labels.squeeze(dim=1)  # (b, h, w)
+        pred_value = output.squeeze().cpu().item()
 
-        # multi-class segmentation
-        else:
-            prob = F.softmax(logits, dim=1)  # convert to probs   (b, c, h, w)
-            pred_labels = torch.argmax(prob, dim=1)  # convert to labels  (b, h, w)
-
-    # bring pred on cpu
-    pred_labels = pred_labels.cpu().numpy()
-    return pred_labels
+    return pred_value

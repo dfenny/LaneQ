@@ -1,12 +1,12 @@
 # Assuming we have multiple models in this directory
 from .cnn import CNN
-# from .model_1 import Model_2
+from .cnn_sppf import CNN_SPPF
 # from .model_1 import Model_3
 
 # Making a dictiaonary for convenience
 existing_models = {
-                    "cnn": CNN
-                    # "model_2": Model_2,
+                    "cnn": CNN,
+                    "cnn_sppf": CNN_SPPF
                     # "model_3": Model_3
 }
 
