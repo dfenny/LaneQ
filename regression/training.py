@@ -13,9 +13,15 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm.notebook import tqdm
 
-from models import get_model
-from utils.dataset import RegressionDataset
-from utils.preprocessing import get_img_transform
+# Import these if running /regression/Regression_train_inference.ipynb
+# from models import get_model
+# from utils.dataset import RegressionDataset
+# from utils.preprocessing import get_img_transform
+
+# Import these if running /inference.py
+from .models import get_model
+from .utils.dataset import RegressionDataset
+from .utils.preprocessing import get_img_transform
 
 
 # global variable

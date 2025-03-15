@@ -13,9 +13,15 @@ from torch.utils.data import DataLoader
 from torchmetrics.segmentation import MeanIoU
 from tqdm.notebook import tqdm
 
-from models import get_model
-from utils.dataset import SegmentationDataset
-from utils.preprocessing import get_img_transform
+# Import these if running /segmetnation/Unet_train_inference.ipynb
+# from models import get_model
+# from utils.dataset import SegmentationDataset
+# from utils.preprocessing import get_img_transform
+
+# Import these if running /inference.py
+from .models import get_model
+from .utils.dataset import SegmentationDataset
+from .utils.preprocessing import get_img_transform
 
 
 # global variable
