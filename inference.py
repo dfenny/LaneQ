@@ -60,7 +60,7 @@ for segment in annotations_dict["annotations"]:
     
     # TODO: I have a doubt here. Sicne we're only using the coordinates of the bounding box to crop the segment, we might crop in nearby lane lines too. Does anyone know what we can do here?
     x, y, w, h = segment["bounding_box"]  # Extract bounding box
-    cropped_image = image[y:y+h, x:x+w]
+    segment_img = image[y:y+h, x:x+w]
 
     # Predicting the degradation value
     degradation_value = pred_degradation_value(model=regression_model, test_img=segment_img, device=DEVICE)
