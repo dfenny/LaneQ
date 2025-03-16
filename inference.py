@@ -77,8 +77,8 @@ for segment in annotations_dict["annotations"]:
     degradation_value = pred_degradation_value(model=regression_model, test_img=segment_img, device=DEVICE)
 
     # Setting the degradation value to the segment predicted value
-    segment["degradation_value"] = degradation_value
-    # segment["degradation_value"] = -1
+    segment["degradation"] = degradation_value
+    # segment["degradation"] = -1
 
 
 # Store all the information in a JSON file of the input image
@@ -93,10 +93,10 @@ input_img = cv2.imread(input_image_path)
 for segment in annotations_dict["annotations"]:
     x, y, w, h = segment["bounding_box"]
     cv2.rectangle(input_img, (x, y), (x+w, y+h), (0, 255, 0), 2)
-    cv2.putText(input_img, f"{segment['degradation_value']}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-    if segment["degradation_value"] < mild_degradation_threshold:
+    cv2.putText(input_img, f"{segment["degradation"]}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+    if segment["degradation"] < mild_degradation_threshold:
         cv2.rectangle(input_img, (x, y), (x+w, y+h), (0, 255, 0), 2)
-    elif segment["degradation_value"] < moderate_degradation_threshold:
+    elif segment["degradation"] < moderate_degradation_threshold:
         cv2.rectangle(input_img, (x, y), (x+w, y+h), (0, 255, 255), 2)
     else:
         cv2.rectangle(input_img, (x, y), (x+w, y+h), (0, 0, 255), 2)
