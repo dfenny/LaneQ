@@ -9,13 +9,15 @@ from torchvision.transforms import ToTensor
 
 class RegressionDataset(Dataset):
     
-    def __init__(self, image_dir, degradation_values_csv, transform=None):
+    def __init__(self, image_dir, degradation_values_csv, transform=None, subset_size=None):
         self.image_dir = image_dir
-        self.data = pd.read_csv(degradation_values_csv, header=None, names=["filename", "value"])
+        self.data = pd.read_csv(degradation_values_csv)
         self.transform = transform # I don't think we'll need transforms since it's a small input, but I'll leave this here nevertheless
 
-        # get all filenames in given dataset location
-        self.file_names = sorted(os.listdir(image_dir))
+        if subset_size is not None:
+            subset_size = min(len(self.data), subset_size)
+            self.data = self.data.sample(n=subset_size, ignore_index=True)
+
 
     def __len__(self):
         return len(self.data)  # Total number of samples
