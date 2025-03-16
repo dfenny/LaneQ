@@ -25,7 +25,7 @@ def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13):
 
 
 def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, save_name, bev_shape=(640, 640),
-                                                 min_area=100, min_roi_overlap=0.6, dilated_kernel=13):
+                                                 min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4):
 
     # generate connected components
     num_labels, label_mask, bboxes = hp.generate_connected_components(mask, connectivity=8)
@@ -59,7 +59,11 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
     for idx in range(1, num_labels):
 
         degradation_ratio = component_degradation.get(idx, -1)   # get degradation ratio (-1 if not calculated)
-        coco_bbox = bboxes[idx].tolist()   # get bbox
+        coco_bbox = bboxes[idx].tolist()   # get bbox (top-left-x, top-left-y, width, height)
+
+        # if either dimension is less that required set ratio to -1
+        if coco_bbox[2] < min_segment_dimension or coco_bbox[3] < min_segment_dimension:
+            degradation_ratio = -1
 
         # save separate segment as png if degradation ratio is calculated
         if degradation_ratio >= 0:
@@ -94,7 +98,7 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
 
 def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, annotations_output_dir, bev_shape=(640, 640),
-                                     min_area=100, min_roi_overlap=0.6, dilated_kernel=13):
+                                     min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4):
 
     # ensure all necessary folders are available
     os.makedirs(segment_output_dir, exist_ok=True)
@@ -130,7 +134,8 @@ def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, an
                                                                                    bev_shape=bev_shape,
                                                                                    min_area=min_area,
                                                                                    min_roi_overlap=min_roi_overlap,
-                                                                                   dilated_kernel=dilated_kernel)
+                                                                                   dilated_kernel=dilated_kernel,
+                                                                                   min_segment_dimension=min_segment_dimension)
 
         segment_label_list.extend(segment_labels)
 

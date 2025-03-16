@@ -185,3 +185,10 @@ degradation _calculation/output/*
 
 **/.DS_Store
 
+# to ignore all files under regression/data folder except README.md
+regression/data/*
+!regression/data/README.md
+
+# to ignore all files under regression/experiment_results folder except README.md
+regression/experiment_results/*
+!regression/experiment_results/README.md
