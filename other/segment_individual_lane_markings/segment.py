@@ -135,9 +135,10 @@ def process_polygon_into_mask(polygon, lanetype, img):
     contour = np.array(polygon.exterior.coords, dtype=np.int32)
     cv2.fillPoly(mask, [contour], 255)
     # Handle solid lane lines first (they are simplest)
-    if ln_style == "solid":
+    if ln_style == "solid" and not "double" in ln_cat:
         return mask
-    elif ln_dir == "parallel" and ln_style == "dashed":
+    elif ((ln_dir == "parallel" and ln_style == "dashed") 
+          or (ln_dir == "parallel" and "double" in ln_cat)):
         bw_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         blurred_img = cv2.GaussianBlur(bw_img, (5,5), 0)
 
