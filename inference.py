@@ -11,7 +11,9 @@ from segmentation.utils.preprocessing import load_image, get_img_transform, load
 
 from degradation_calculation.calculate_degradation import generate_individual_segments_and_dict
 
-
+    
+input_image_path = "D:/Ankith B V/Documents/UofU/Datasets/BDD100k/cs6945share/retro_project/bdd100k/images/test/cabc9045-b3349548.jpg"
+ 
 # ==============================================
 # Threshold values for degradation
 
@@ -47,7 +49,6 @@ regression_model = load_saved_regression_model(model_name=regression_model_name,
 # Now I'll be running inference of segmetnation model and storing it's results in a JSON file for each input image
 
 # Loading image
-input_image_path = "D:/Ankith B V/Documents/UofU/Datasets/BDD100k/cs6945share/retro_project/bdd100k/images/test/cabc9045-b3349548.jpg"
 input_img = load_image(input_image_path)
 
 # Predicting the segmentation mask
