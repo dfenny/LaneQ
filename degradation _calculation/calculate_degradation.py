@@ -2,6 +2,8 @@ import os
 import time
 import json
 import argparse
+from distutils.command.install_egg_info import safe_version
+
 from tqdm import tqdm
 
 import cv2
@@ -28,7 +30,8 @@ def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13, com
 
 def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, save_name, bev_shape=(640, 640),
                                                  min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4,
-                                                 comp_len_limit=100, sub_comp_len=80, relax_threshold=0.05):
+                                                 comp_len_limit=100, sub_comp_len=80, relax_threshold=0.05,
+                                                 save_segments=True):
 
     # generate connected components
     num_labels, label_mask, bboxes = hp.generate_connected_components(mask, connectivity=8)
@@ -81,8 +84,9 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
             # Write the segment to the output dir
             segment_name = f"{save_name}_{idx}.png"
-            segment_path = os.path.join(segment_output_dir, segment_name)
-            cv2.imwrite(segment_path, segment)
+            if save_segments:
+                segment_path = os.path.join(segment_output_dir, segment_name)
+                cv2.imwrite(segment_path, segment)
 
             segment_info = {
                 "name": segment_name,
@@ -106,7 +110,7 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_dir, annotations_output_dir,
                                            bev_shape=(640, 640), min_area=100, min_roi_overlap=0.6,
                                            dilated_kernel=13, min_segment_dimension=4, comp_len_limit=100, sub_comp_len=80,
-                                           relax_threshold=0.05):
+                                           relax_threshold=0.05, save_segments=True):
 
     # ensure all necessary folders are available
     os.makedirs(segment_output_dir, exist_ok=True)
@@ -117,7 +121,7 @@ def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_d
     segment_label_list = []
 
     main_tic = time.time()
-    for filename in tqdm(file_list[:10]):
+    for filename in tqdm(file_list):
 
         # read image and mask
         img_path = os.path.join(image_dir, filename)
@@ -146,8 +150,8 @@ def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_d
                                                                                    min_segment_dimension=min_segment_dimension,
                                                                                    comp_len_limit=comp_len_limit,
                                                                                    sub_comp_len=sub_comp_len,
-                                                                                   relax_threshold=relax_threshold
-                                                                                   )
+                                                                                   relax_threshold=relax_threshold,
+                                                                                   save_segments=save_segments)
 
         segment_label_list.extend(segment_labels)
 
