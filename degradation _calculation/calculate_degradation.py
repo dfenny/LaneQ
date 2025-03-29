@@ -11,7 +11,8 @@ import pandas as pd
 import degradation_utils as hp
 
 
-def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13):
+def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13, comp_len_limit=100, sub_comp_len=80,
+                          relax_threshold=0.05):
     degradation_info = {}
     for idx in np.unique(label_mask):
         if idx == 0:
@@ -19,13 +20,15 @@ def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13):
 
         component_mask = (label_mask == idx).astype(np.uint8)  # Create a mask for the current object
         degradation_ratio = hp.cal_degradation_ratio(grayscale_img=gray_img, component_mask=component_mask,
-                                                     dilate_kernel=dilate_kernel)
+                                                     dilate_kernel=dilate_kernel, comp_len_limit=comp_len_limit,
+                                                     sub_comp_len=sub_comp_len, relax_threshold=relax_threshold)
         degradation_info[idx] = degradation_ratio
     return degradation_info
 
 
 def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, save_name, bev_shape=(640, 640),
-                                                 min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4):
+                                                 min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4,
+                                                 comp_len_limit=100, sub_comp_len=80, relax_threshold=0.05):
 
     # generate connected components
     num_labels, label_mask, bboxes = hp.generate_connected_components(mask, connectivity=8)
@@ -41,7 +44,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
     matrix = hp.generate_perspective_matrix(roi_pts=roi_points, output_shape=bev_shape)
 
     # Apply transformation on image
-    img_bev = hp.apply_perspective_transform(img=img.copy(), matrix=matrix, output_shape=bev_shape)
+    img_bev = hp.apply_perspective_transform(img=img.copy(), matrix=matrix, output_shape=bev_shape,
+                                             interpolation=cv2.INTER_NEAREST)
     gray_img_bev = cv2.cvtColor(img_bev, cv2.COLOR_RGB2GRAY)   # converting image to grayscale
 
     # Apply transformation on labelled mask
@@ -51,7 +55,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
     # get degradation ratio for each valid components
     component_degradation = fetch_all_components_degradation(gray_img=gray_img_bev, label_mask=filtered_label_mask_bev,
-                                                             dilate_kernel=dilated_kernel)
+                                                             dilate_kernel=dilated_kernel, comp_len_limit=comp_len_limit,
+                                                             sub_comp_len=sub_comp_len, relax_threshold=relax_threshold)
 
     # Loop over each component (skip label 0, which is the background)
     segment_labels = []
@@ -81,7 +86,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
             segment_info = {
                 "name": segment_name,
-                'degradation': degradation_ratio
+                'degradation': degradation_ratio,
+                'ymax': ymax
             }
             segment_labels.append(segment_info)
 
@@ -97,8 +103,10 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
 
 
-def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, annotations_output_dir, bev_shape=(640, 640),
-                                     min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4):
+def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_dir, annotations_output_dir,
+                                           bev_shape=(640, 640), min_area=100, min_roi_overlap=0.6,
+                                           dilated_kernel=13, min_segment_dimension=4, comp_len_limit=100, sub_comp_len=80,
+                                           relax_threshold=0.05):
 
     # ensure all necessary folders are available
     os.makedirs(segment_output_dir, exist_ok=True)
@@ -109,7 +117,7 @@ def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, an
     segment_label_list = []
 
     main_tic = time.time()
-    for filename in tqdm(file_list):
+    for filename in tqdm(file_list[:10]):
 
         # read image and mask
         img_path = os.path.join(image_dir, filename)
@@ -135,7 +143,11 @@ def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, an
                                                                                    min_area=min_area,
                                                                                    min_roi_overlap=min_roi_overlap,
                                                                                    dilated_kernel=dilated_kernel,
-                                                                                   min_segment_dimension=min_segment_dimension)
+                                                                                   min_segment_dimension=min_segment_dimension,
+                                                                                   comp_len_limit=comp_len_limit,
+                                                                                   sub_comp_len=sub_comp_len,
+                                                                                   relax_threshold=relax_threshold
+                                                                                   )
 
         segment_label_list.extend(segment_labels)
 
@@ -171,6 +183,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # start generating labels
-    generate_degradation_annotations(image_dir=args.image_dir, mask_dir=args.mask_dir,
-                                     segment_output_dir=args.segment_output_dir,
-                                     annotations_output_dir=args.annotations_output_dir)
+    main_degradation_annotations_generator(image_dir=args.image_dir, mask_dir=args.mask_dir,
+                                           segment_output_dir=args.segment_output_dir,
+                                           annotations_output_dir=args.annotations_output_dir)
