@@ -90,7 +90,8 @@ def get_largest_area_polygon(points1, points2):
 def check_linestring_for_overlap_with_polygons(ls, pol_list):
     for pol in pol_list:
         # Using code from this stack overflow:
-        # https://stackoverflow.com/questions/73395305/determine-if-a-line-segment-is-within-a-polygon
+        # https://stackoverflow.com/questions/73395305 (cont on next line)
+        # /determine-if-a-line-segment-is-within-a-polygon
         pol_ext = LineString(list(pol.exterior.coords))
         if pol_ext.intersection(ls):
             return True
@@ -181,7 +182,6 @@ def refine_mask_by_color_distance(mask, img, road_color, tolerance):
 
 def extract_annotations(index):
     """Extracts the lane marking annotations from the JSON file for the given index."""
-    
     img_path = os.path.join(image_dir, image_files[index])
     json_path = os.path.join(json_dir, json_files[index])
 
@@ -218,10 +218,30 @@ def extract_annotations(index):
     for mask in masks:
         combined_mask = cv2.bitwise_or(combined_mask, mask)
 
+    # Process unused lane markings that did not form a polygon pair
+    for obj in objects:
+        if not obj['attributes']['direction'] == 'parallel':
+            continue
+        line_coords = construct_line_tuples(obj["poly2d"])
+        ls = LineString(line_coords)
+        # If this lane marking is not already part of a polygon
+        if not check_linestring_for_overlap_with_polygons(ls, list(polygons.keys())):
+            # Create candidate polygons by offsetting horizontally by 40 pixels on either side
+            left_offset = [(x - 5, y) for (x, y) in line_coords]
+            right_offset = [(x + 5, y) for (x, y) in line_coords]
+            poly_coords = left_offset + right_offset[::-1]
+            poly = Polygon(poly_coords)
+            lane_type = (obj["category"], obj["attributes"]["direction"], obj["attributes"]["style"])
+            if poly.is_valid and poly.area > 0:
+                mask = process_polygon_into_mask(poly, lane_type, img)
+                combined_mask = cv2.bitwise_or(combined_mask, mask)
+            # else:
+            #     print(f"The polygon {poly_coords} is not valid.")
+
     return img, objects, polygons, combined_mask
 
 if __name__ == "__main__":
-    out_dir = "masks"
+    out_dir = "masks_v3/train"
     os.makedirs(out_dir, exist_ok=True)
     for ind in trange(len(image_files)):
         _, _, _, mask = extract_annotations(ind)
