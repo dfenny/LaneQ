@@ -87,6 +87,15 @@ def get_largest_area_polygon(points1, points2):
     poly_2 = Polygon(shape_2)
     return poly_1 if poly_1.is_valid else poly_2 if poly_2.is_valid else None
 
+def check_linestring_for_overlap_with_polygons(ls, pol_list):
+    for pol in pol_list:
+        # Using code from this stack overflow:
+        # https://stackoverflow.com/questions/73395305/determine-if-a-line-segment-is-within-a-polygon
+        pol_ext = LineString(list(pol.exterior.coords))
+        if pol_ext.intersection(ls):
+            return True
+    return False
+
 def sort_through_lines_to_find_matches(objects):
     """ Given a list of objects, find the lane types we're interested in and
     sort them out and then work with each group individually
