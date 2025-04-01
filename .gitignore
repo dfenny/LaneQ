@@ -183,6 +183,10 @@ segmentation/experiment_results/*
 degradation _calculation/output/*
 !degradation _calculation/output/README.md
 
+# to ignore all files under regression/experiment_results folder except README.md
+regression/experiment_results/*
+!regression/experiment_results/README.md
+
 **/.DS_Store
 
 # to ignore all files under regression/data folder except README.md
