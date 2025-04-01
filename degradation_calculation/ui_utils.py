@@ -23,7 +23,7 @@ class RegDataFilterUI:
         self.random_flag = False
 
         # load image names
-        self.img_list = os.listdir(img_dir)
+        self.img_list = sorted(os.listdir(img_dir))
 
         # txt file to save filter images name
         if save_checkpoint_file is not None:
