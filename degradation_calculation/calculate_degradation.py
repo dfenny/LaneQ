@@ -175,6 +175,52 @@ def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_d
     print(f"Segment label file saved at {fn}")
 
 
+def generate_individual_segments_and_dict(img, mask, filename):
+    """Generate individual segments from the mask during inference and make a dict for the input image"""
+
+    # generate connected components
+    num_labels, label_mask, bboxes = hp.generate_connected_components(mask, connectivity=8)
+
+    # Loop over each component (skip label 0, which is the background)
+    segment_labels = []
+    annot_results = []
+
+    for idx in range(1, num_labels):
+        coco_bbox = bboxes[idx].tolist()  # get bbox
+
+        xmin, ymin, xmax, ymax = hp.box_coco_to_corner(coco_bbox)
+
+        # get segment in original image
+        orig_mask = (label_mask == idx).astype(np.uint8)
+        segment = cv2.bitwise_and(img, img, mask=orig_mask)  # apply mask
+        segment = segment[ymin:ymax + 1, xmin:xmax + 1].copy()  # get specific segment crop
+
+        # Write the segment to the output dir
+        segment_name = f"{filename}_object{idx}.png"
+        # segment_path = os.path.join(segment_output_dir, segment_name)
+        # cv2.imwrite(segment_path, cv2.cvtColor(segment, cv2.COLOR_RGB2BGR))
+
+        segment_info = {
+            "name": segment_name,
+            'degradation': -1
+        }
+        segment_labels.append(segment_info)
+
+        # store annotations
+        mask_dict = {
+            'id': segment_name,
+            'bounding_box': coco_bbox,
+            'degradation': -1
+        }
+        annot_results.append(mask_dict)
+
+    annotations_dict = {
+        'image': filename,
+        'annotations': annot_results
+    }
+
+    return annotations_dict
+
 
 if __name__ == '__main__':
 
