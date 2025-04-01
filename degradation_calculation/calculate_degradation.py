@@ -31,6 +31,7 @@ def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13, com
 def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, save_name, bev_shape=(640, 640),
                                                  min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4,
                                                  comp_len_limit=100, sub_comp_len=80, relax_threshold=0.05,
+                                                 degradation_bins=(0, 0.15, 0.3, 1),
                                                  save_segments=True):
 
     # generate connected components
@@ -73,6 +74,11 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
         if coco_bbox[2] < min_segment_dimension or coco_bbox[3] < min_segment_dimension:
             degradation_ratio = -1
 
+        # assign degradation target class
+        # -1 if value is lower than the start of first bin and len(degradation_bins) if value is outside last bin
+        degradation_target = np.digitize(degradation_ratio, degradation_bins, right=True) - 1
+        degradation_target = int(degradation_target)  # required to save json
+
         # save separate segment as png if degradation ratio is calculated
         if degradation_ratio >= 0:
             xmin, ymin, xmax, ymax = hp.box_coco_to_corner(coco_bbox)
@@ -91,7 +97,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
             segment_info = {
                 "name": segment_name,
                 'degradation': degradation_ratio,
-                'ymax': ymax
+                "degradation_target": degradation_target,
+                'ymax': ymax,
             }
             segment_labels.append(segment_info)
 
@@ -99,7 +106,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
         mask_dict = {
             'id': idx,
             'bounding_box': coco_bbox,
-            'degradation': degradation_ratio
+            'degradation': degradation_ratio,
+            "degradation_target": degradation_target
         }
         annot_results.append(mask_dict)
 
@@ -110,7 +118,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_dir, annotations_output_dir,
                                            bev_shape=(640, 640), min_area=100, min_roi_overlap=0.6,
                                            dilated_kernel=13, min_segment_dimension=4, comp_len_limit=100, sub_comp_len=80,
-                                           relax_threshold=0.05, save_segments=True):
+                                           relax_threshold=0.05, degradation_bins=(0, 0.15, 0.3, 1),
+                                           save_segments=True):
 
     # ensure all necessary folders are available
     os.makedirs(segment_output_dir, exist_ok=True)
@@ -151,6 +160,7 @@ def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_d
                                                                                    comp_len_limit=comp_len_limit,
                                                                                    sub_comp_len=sub_comp_len,
                                                                                    relax_threshold=relax_threshold,
+                                                                                   degradation_bins=degradation_bins,
                                                                                    save_segments=save_segments)
 
         segment_label_list.extend(segment_labels)

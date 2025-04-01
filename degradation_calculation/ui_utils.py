@@ -10,6 +10,10 @@ import random
 
 import degradation_utils as hp
 
+# class colors
+_color_map = {0: (0, 255, 0), 1: (255, 255, 0), 2: (255, 0, 0)}
+_target_name_to_code = {'ignore': -1, 'Good': 0, 'Slight': 1, 'Severe': 2}
+_target_code_to_name =  {v: k for k, v in _target_name_to_code.items()}
 
 class RegDataFilterUI:
 
@@ -85,10 +89,26 @@ class RegDataFilterUI:
                 overflow_x='auto',  # Enable horizontal scrolling if needed
                 overflow_y='hidden',  # Disable vertical scrolling
                 flex_flow='row nowrap',
-                height="33px",
+                height="auto",
                 padding='0',
                 margin='0',
                 display='flex',
+            )
+        )
+
+        # class radio buttons
+        self.ratio_title = widgets.Label(value=f"Segment wise target labels: ",
+                                      layout=Layout(padding='0', margin='0 0 5px 0'))
+        radio_grps = self.generate_radio_groups(annot_data["annotations"])
+        self.radio_row = widgets.HBox(
+            children=radio_grps,
+            layout=widgets.Layout(
+                overflow_x='auto',  # Show scrollbar only when needed
+                flex_flow='row',
+                display='flex',
+                width='100%',
+                # border='1px solid lightgray',  # Visual boundary
+                padding='5px'
             )
         )
 
@@ -131,7 +151,8 @@ class RegDataFilterUI:
 
         # --- Final GUI ---
         self.gui = VBox(
-            children=[self.img_row, self.saved_cnt_label, self.fn_label, self.chbox_row, self.button_row],
+            children=[self.img_row, self.saved_cnt_label, self.fn_label, self.chbox_row, self.ratio_title,
+                      self.radio_row, self.button_row],
             layout=Layout(
                 width="80%",
                 padding='0',
@@ -153,13 +174,28 @@ class RegDataFilterUI:
             self.show_message(msg="No annot to save", duration=2)  # display saved notification for 2 sec
             return
 
+        # check radio buttons
+        radio_groups = self.radio_row.children  # list of vbox containing radio grps
+        new_targets = {}
+        for r_grp in radio_groups:
+            comp_id = int(r_grp.children[0].value.split(" --> ", maxsplit=1)[0])  # get grp name
+            comp_target = r_grp.children[1].value  # get radio button that is active
+            new_targets[comp_id] = _target_name_to_code[comp_target]
+
         # create a new annotation file with only degradation value accepted by the user
         # set other values to -1
         new_annot_data = self.cache["annot_data"].copy()
         updated_annot = []
         for component in new_annot_data["annotations"]:
+
+            # based on checkbox buttons
             new_value = component["degradation"] if component["id"] in to_keep else -1
-            component["manual_check"] = new_value
+            component["manual_checked_degradation"] = new_value
+
+            # based on radio buttons
+            if component["id"] in new_targets:   # safety check
+                component["manual_checked_degradation_target"] = new_targets[component["id"]]
+
             updated_annot.append(component.copy())
         new_annot_data["annotations"] = updated_annot
 
@@ -250,7 +286,7 @@ class RegDataFilterUI:
                 plt.show()
 
     def generate_degradation_checkboxes(self, annot_data):
-        chbox_labels = self.get_degradation_values(annot_data)
+        chbox_labels, _ = self.get_degradation_values(annot_data)
         checkboxes = [
             widgets.Checkbox(
                 value=True,
@@ -261,6 +297,32 @@ class RegDataFilterUI:
             for label in chbox_labels
         ]
         return checkboxes
+
+    def generate_radio_groups(self, annot_data, options=('ignore', 'Good', 'Slight', 'Severe')):
+
+        # using global variable
+        options = list(_target_name_to_code.keys())
+
+        groups = []
+        grp_labels, target_values = self.get_degradation_values(annot_data)
+        for glabel, target in zip(grp_labels, target_values):
+
+            label = widgets.Label(value=glabel)     # Create label for the group
+            target_name = _target_code_to_name.get(target, "ignore")
+            radio = widgets.RadioButtons(options=options, value=target_name)   # Create radio buttons - they are vertical by default
+
+            # Combine label and radio buttons in a VBox
+            group = widgets.VBox(
+                [label, radio],
+                layout=widgets.Layout(
+                    margin='0 10px',
+                    width='auto',  # Let content determine width
+                    min_width='80px',  # Prevent groups from becoming too narrow
+                    overflow='hidden'  # Disables scrolling for VBox
+                )
+            )
+            groups.append(group)
+        return groups
 
     def load_new_image(self, b, increment=1):
 
@@ -283,6 +345,10 @@ class RegDataFilterUI:
         new_checkboxes = self.generate_degradation_checkboxes(annot_data["annotations"])
         self.chbox_row.children = [self.ch_label] + new_checkboxes
 
+        # update radio groups
+        new_radio_grps = self.generate_radio_groups(annot_data["annotations"])
+        self.radio_row.children = new_radio_grps
+
         # reset the toggle button
         self.toggle_btn.value = False
         self.toggle_btn.description = 'hide bbox'
@@ -293,6 +359,7 @@ class RegDataFilterUI:
 
     def get_degradation_values(self, annot_data):
         values = []
+        target = []
         for component in annot_data:
             ratio = component["degradation"]
             idx = component["id"]
@@ -300,7 +367,8 @@ class RegDataFilterUI:
                 continue
             label = f"{idx} --> {round(ratio, 3)} "
             values.append(label)
-        return values
+            target.append(component["degradation_target"])
+        return values, target
 
     def load_data(self, img_name):
 
@@ -338,10 +406,13 @@ class RegDataFilterUI:
             ratio = component["degradation"]
             bbox = component["bounding_box"]
             idx = component["id"]
+            target = component["degradation_target"]
             if ratio < 0:
                 continue
             bbox = hp.box_coco_to_corner(bbox)
-            annoted_img = hp.add_bbox(img=annoted_img, bbox=bbox, label=f"{idx}:{round(ratio, 3)}", font_scale=0.9)
+            color = _color_map.get(target, (255, 255, 255))
+            annoted_img = hp.add_bbox(img=annoted_img, bbox=bbox, label=f"{idx}:{round(ratio, 3)}", font_scale=0.9,
+                                      bbox_color=color, text_color=(0, 0, 255))
 
         return annoted_img
 
