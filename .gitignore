@@ -178,10 +178,9 @@ segmentation/data/*
 segmentation/experiment_results/*
 !segmentation/experiment_results/README.md
 
-
 # to ignore all files under degradation_calculation/output folder except README.md
-degradation _calculation/output/*
-!degradation _calculation/output/README.md
+degradation_calculation/output/*
+!degradation_calculation/output/README.md
 
 # to ignore all files under regression/experiment_results folder except README.md
 regression/experiment_results/*
@@ -189,3 +188,6 @@ regression/experiment_results/*
 
 **/.DS_Store
 
+# to ignore all files under regression/data folder except README.md
+regression/data/*
+!regression/data/README.md
