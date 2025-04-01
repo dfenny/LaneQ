@@ -13,9 +13,15 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm.notebook import tqdm
 
-from models import get_model
-from utils.dataset import RegressionDataset
-from utils.preprocessing import get_img_transform
+# Import these if running /regression/Regression_train_inference.ipynb
+# from models import get_model
+# from utils.dataset import RegressionDataset
+# from utils.preprocessing import get_img_transform
+
+# Import these if running /inference.py
+from .models import get_model
+from .utils.dataset import RegressionDataset
+from .utils.preprocessing import get_img_transform
 
 
 # global variable
@@ -202,18 +208,16 @@ def main(model_name, config):
         print(f"Using DEVICE: {DEVICE}")
 
     # generate train data loader
-    train_loader, train_size = generate_dataloader(image_dir=dataset_config["train"]["img_dir"],
-                                                   mask_dir=dataset_config["train"]["mask_dir"],
-                                                   preprocess_config=preprocess_config,
-                                                   batch_size=train_config["batch_size"],
-                                                   num_workers=train_config["num_workers"])
+    train_loader, train_size = generate_sppf_dataloader(image_dir=dataset_config["train"]["img_dir"],
+                                               degradation_values_csv=dataset_config["train"]["degradation_values_csv"],
+                                               batch_size=train_config["batch_size"],
+                                               num_workers=train_config["num_workers"], transform=None)
 
     # generate validation data loader
-    val_loader, val_size = generate_dataloader(image_dir=dataset_config["train"]["img_dir"],
-                                               mask_dir=dataset_config["train"]["mask_dir"],
-                                               preprocess_config=preprocess_config,
-                                               batch_size=train_config["batch_size"],
-                                               num_workers=train_config["num_workers"])
+    val_loader, val_size = generate_sppf_dataloader(image_dir=dataset_config["val"]["img_dir"],
+                                           degradation_values_csv=dataset_config["val"]["degradation_values_csv"],
+                                           batch_size=train_config["batch_size"],
+                                           num_workers=train_config["num_workers"], transform=None)
 
     print(f"Train Dataset loaded. #samples: {train_size}")
     print(f"Validation Dataset loaded. #samples: {val_size}")
