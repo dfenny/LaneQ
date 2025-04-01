@@ -33,12 +33,12 @@ img_transform = transforms.Compose([
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Segmentation model
-seg_saved_weight_path = "segmentation/experiment_results/checkpoints/unet_checkpoint_epoch_5.pth"
+seg_saved_weight_path = "segmentation/experiment_results/douglas/experiment_results/checkpoints/unet_checkpoint_epoch_4.pth"
 segmentation_model_name = "unet"
 segmentation_model_config = {'in_channels': 3, 'out_channels': 1}
 
 # Regression model    
-reg_saved_weight_path = "regression/experiment_results/checkpoints/cnn_sppf_final_2025-03-17_23-57-21.pth"
+reg_saved_weight_path = "regression/experiment_results/checkpoints/cnn_sppf_final_2025-03-31_21-30-50.pth"
 regression_model_name = "cnn_sppf"
 regression_model_config = {'in_channels': 3, 'out_dim': 1}
 
@@ -112,4 +112,4 @@ for segment in annotations_dict["annotations"]:
     else:
         cv2.rectangle(input_img, (x, y), (x+w, y+h), (0, 0, 255), 2)
 
-cv2.imwrite(f"damage_ratio_calc_data/{filename_without_ext}_annotated.jpg", input_img)
+cv2.imwrite(f"damage_ratio_calc_data/{filename_without_ext}_annotated_new.jpg", input_img)

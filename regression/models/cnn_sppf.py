@@ -39,7 +39,7 @@ class CNN_SPPF(nn.Module):
         self.bn2 = nn.BatchNorm2d(32) # Adding batch normalization
         
         # SPPF layer and adaptive pooling
-        self.sppf = SPPF(32, 64, pool_size=2)
+        self.sppf = SPPF(32, 64, pool_size=5)
         self.global_pool = nn.AdaptiveAvgPool2d(1)
 
         # Fully connected layers
