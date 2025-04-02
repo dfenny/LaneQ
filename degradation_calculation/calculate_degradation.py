@@ -2,19 +2,19 @@ import os
 import time
 import json
 import argparse
+from distutils.command.install_egg_info import safe_version
+
 from tqdm import tqdm
 
 import cv2
 import numpy as np
 import pandas as pd
 
-# Import these if running /degradaion_calculation/degradation_labelling.py
-# import degradation_utils as hp
+import degradation_utils as hp
 
-# Import these if running /inference.py
-from degradation_calculation import degradation_utils as hp
 
-def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13):
+def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13, comp_len_limit=100, sub_comp_len=80,
+                          relax_threshold=0.05):
     degradation_info = {}
     for idx in np.unique(label_mask):
         if idx == 0:
@@ -22,13 +22,16 @@ def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13):
 
         component_mask = (label_mask == idx).astype(np.uint8)  # Create a mask for the current object
         degradation_ratio = hp.cal_degradation_ratio(grayscale_img=gray_img, component_mask=component_mask,
-                                                     dilate_kernel=dilate_kernel)
+                                                     dilate_kernel=dilate_kernel, comp_len_limit=comp_len_limit,
+                                                     sub_comp_len=sub_comp_len, relax_threshold=relax_threshold)
         degradation_info[idx] = degradation_ratio
     return degradation_info
 
 
 def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, save_name, bev_shape=(640, 640),
-                                                 min_area=100, min_roi_overlap=0.6, dilated_kernel=13):
+                                                 min_area=100, min_roi_overlap=0.6, dilated_kernel=13, min_segment_dimension=4,
+                                                 comp_len_limit=100, sub_comp_len=80, relax_threshold=0.05,
+                                                 save_segments=True):
 
     # generate connected components
     num_labels, label_mask, bboxes = hp.generate_connected_components(mask, connectivity=8)
@@ -44,7 +47,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
     matrix = hp.generate_perspective_matrix(roi_pts=roi_points, output_shape=bev_shape)
 
     # Apply transformation on image
-    img_bev = hp.apply_perspective_transform(img=img.copy(), matrix=matrix, output_shape=bev_shape)
+    img_bev = hp.apply_perspective_transform(img=img.copy(), matrix=matrix, output_shape=bev_shape,
+                                             interpolation=cv2.INTER_NEAREST)
     gray_img_bev = cv2.cvtColor(img_bev, cv2.COLOR_RGB2GRAY)   # converting image to grayscale
 
     # Apply transformation on labelled mask
@@ -54,7 +58,8 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
     # get degradation ratio for each valid components
     component_degradation = fetch_all_components_degradation(gray_img=gray_img_bev, label_mask=filtered_label_mask_bev,
-                                                             dilate_kernel=dilated_kernel)
+                                                             dilate_kernel=dilated_kernel, comp_len_limit=comp_len_limit,
+                                                             sub_comp_len=sub_comp_len, relax_threshold=relax_threshold)
 
     # Loop over each component (skip label 0, which is the background)
     segment_labels = []
@@ -62,7 +67,11 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
     for idx in range(1, num_labels):
 
         degradation_ratio = component_degradation.get(idx, -1)   # get degradation ratio (-1 if not calculated)
-        coco_bbox = bboxes[idx].tolist()   # get bbox
+        coco_bbox = bboxes[idx].tolist()   # get bbox (top-left-x, top-left-y, width, height)
+
+        # if either dimension is less that required set ratio to -1
+        if coco_bbox[2] < min_segment_dimension or coco_bbox[3] < min_segment_dimension:
+            degradation_ratio = -1
 
         # save separate segment as png if degradation ratio is calculated
         if degradation_ratio >= 0:
@@ -75,12 +84,14 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
             # Write the segment to the output dir
             segment_name = f"{save_name}_{idx}.png"
-            segment_path = os.path.join(segment_output_dir, segment_name)
-            cv2.imwrite(segment_path, segment)
+            if save_segments:
+                segment_path = os.path.join(segment_output_dir, segment_name)
+                cv2.imwrite(segment_path, segment)
 
             segment_info = {
                 "name": segment_name,
-                'degradation': degradation_ratio
+                'degradation': degradation_ratio,
+                'ymax': ymax
             }
             segment_labels.append(segment_info)
 
@@ -96,8 +107,10 @@ def get_degradation_annotations_n_segment_labels(img, mask, segment_output_dir, 
 
 
 
-def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, annotations_output_dir, bev_shape=(640, 640),
-                                     min_area=100, min_roi_overlap=0.6, dilated_kernel=13):
+def main_degradation_annotations_generator(image_dir, mask_dir, segment_output_dir, annotations_output_dir,
+                                           bev_shape=(640, 640), min_area=100, min_roi_overlap=0.6,
+                                           dilated_kernel=13, min_segment_dimension=4, comp_len_limit=100, sub_comp_len=80,
+                                           relax_threshold=0.05, save_segments=True):
 
     # ensure all necessary folders are available
     os.makedirs(segment_output_dir, exist_ok=True)
@@ -133,7 +146,12 @@ def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, an
                                                                                    bev_shape=bev_shape,
                                                                                    min_area=min_area,
                                                                                    min_roi_overlap=min_roi_overlap,
-                                                                                   dilated_kernel=dilated_kernel)
+                                                                                   dilated_kernel=dilated_kernel,
+                                                                                   min_segment_dimension=min_segment_dimension,
+                                                                                   comp_len_limit=comp_len_limit,
+                                                                                   sub_comp_len=sub_comp_len,
+                                                                                   relax_threshold=relax_threshold,
+                                                                                   save_segments=save_segments)
 
         segment_label_list.extend(segment_labels)
 
@@ -159,24 +177,23 @@ def generate_degradation_annotations(image_dir, mask_dir, segment_output_dir, an
 
 def generate_individual_segments_and_dict(img, mask, filename):
     """Generate individual segments from the mask during inference and make a dict for the input image"""
-    
+
     # generate connected components
     num_labels, label_mask, bboxes = hp.generate_connected_components(mask, connectivity=8)
 
     # Loop over each component (skip label 0, which is the background)
     segment_labels = []
     annot_results = []
-    
+
     for idx in range(1, num_labels):
-        
-        coco_bbox = bboxes[idx].tolist()   # get bbox
+        coco_bbox = bboxes[idx].tolist()  # get bbox
 
         xmin, ymin, xmax, ymax = hp.box_coco_to_corner(coco_bbox)
 
         # get segment in original image
         orig_mask = (label_mask == idx).astype(np.uint8)
-        segment = cv2.bitwise_and(img, img, mask=orig_mask)         # apply mask
-        segment = segment[ymin:ymax + 1, xmin:xmax + 1].copy()      # get specific segment crop
+        segment = cv2.bitwise_and(img, img, mask=orig_mask)  # apply mask
+        segment = segment[ymin:ymax + 1, xmin:xmax + 1].copy()  # get specific segment crop
 
         # Write the segment to the output dir
         segment_name = f"{filename}_object{idx}.png"
@@ -196,7 +213,7 @@ def generate_individual_segments_and_dict(img, mask, filename):
             'degradation': -1
         }
         annot_results.append(mask_dict)
-    
+
     annotations_dict = {
         'image': filename,
         'annotations': annot_results
@@ -216,6 +233,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # start generating labels
-    generate_degradation_annotations(image_dir=args.image_dir, mask_dir=args.mask_dir,
-                                     segment_output_dir=args.segment_output_dir,
-                                     annotations_output_dir=args.annotations_output_dir)
+    main_degradation_annotations_generator(image_dir=args.image_dir, mask_dir=args.mask_dir,
+                                           segment_output_dir=args.segment_output_dir,
+                                           annotations_output_dir=args.annotations_output_dir)
