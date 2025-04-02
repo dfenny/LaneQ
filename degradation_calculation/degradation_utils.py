@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from skimage.filters import threshold_otsu
+from skimage.filters import threshold_otsu, threshold_li
 
 def get_roi_points():
     # roi generation
@@ -97,25 +97,61 @@ def apply_perspective_transform(img, matrix, output_shape, interpolation=cv2.INT
     return bev
 
 
-def cal_degradation_ratio(grayscale_img, component_mask, dilate_kernel=13):
+def cal_degradation_ratio(grayscale_img, component_mask, dilate_kernel=13, comp_len_limit=100, sub_comp_len=80,
+                          relax_threshold=0.05):
 
     # dilate the mask to include surrounding road region near lane marking for calculating threshold
     kernel = np.ones((dilate_kernel, dilate_kernel))
     dilated_mask = cv2.dilate(component_mask, kernel, iterations=1)
 
-    # use this dialted region and apply otsu to find a good threshold to identify lane paint
-    temp = cv2.bitwise_and(grayscale_img, grayscale_img, mask=dilated_mask)
-    good_threshold = threshold_otsu(temp[temp > 0])  # use only non-zero intensities
+    # use this dialted region to get neighboring road color info
+    road_plus_lane = cv2.bitwise_and(grayscale_img, grayscale_img, mask=dilated_mask)
 
     # crop given component from the grayscale image using mask
     component_region = cv2.bitwise_and(grayscale_img, grayscale_img, mask=component_mask)
 
-    # find good intensity pixels
-    undegraded_region = (component_region >= good_threshold)
+    # placeholder to label each pixel as good or bad
+    type_mask = component_mask.copy()
 
-    # calculate degradation ratio
-    total_area = np.sum(component_mask)
-    undegraded_area = np.sum(undegraded_region)
+    # if lane is too long calculate degradation by dividing in horizontal bins
+    non_zero_y, non_zero_x = np.nonzero(component_mask)
+    ymin, ymax = non_zero_y.min(), non_zero_y.max()
+    if (ymax - ymin) > comp_len_limit:
+        # divide the component into horizontal bins
+        sub_comp_bins = np.arange(ymax, ymin, -sub_comp_len)
+        if sub_comp_bins[-1] > ymin:
+            # if final bin doesnt cover the end of component add it
+            sub_comp_bins = np.append(sub_comp_bins, ymin)
+
+        # each element is a component division y value as (ymax, ymin)
+        sub_comp_bins = list(zip(sub_comp_bins, sub_comp_bins[1:]))
+
+    else:
+        sub_comp_bins = [(ymax, ymin)]
+
+    # do thresholding on each subcomponent separately:
+    for sub_bin in sub_comp_bins:
+
+        # crop subcomponents containing both road and lane
+        road_lane_crop = road_plus_lane[sub_bin[1]:sub_bin[0], :]
+
+        # apply li thresholding to find threshold to separate lane color and road
+        good_threshold = threshold_li(road_lane_crop[road_lane_crop > 0])  # use only non-zero intensities
+
+        if relax_threshold:
+            # relax the threshold further if required
+            good_threshold = good_threshold * (1 - relax_threshold)
+
+        # find good intensity pixels
+        component_crop = component_region[sub_bin[1]:sub_bin[0], :]
+        undegraded_region = (component_crop >= good_threshold)
+
+        # add the info to type mask
+        type_mask[sub_bin[1]:sub_bin[0], :][undegraded_region] = 2
+
+        # calculate the total degradation
+    total_area = np.sum(type_mask > 0)  # count of non zero pixels
+    undegraded_area = np.sum(type_mask == 2)  # pixels marked as good (label:2)
     degradation_ratio = 1 - (undegraded_area / total_area)
     degradation_ratio = round(degradation_ratio, 4)
     return degradation_ratio

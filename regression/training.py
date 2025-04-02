@@ -75,13 +75,13 @@ def generate_basic_dataloader(image_dir, degradation_values_csv, preprocess_conf
     return dataloader, len(dataset)
 
 
-def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_workers, shuffle=True, transform=None):
+def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_workers, shuffle=True, transform=None, subset_size=None):
 
     if transform is not None:
         image_transformations = transform
         
     # initialize dataset object
-    dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv)
+    dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv, subset_size=subset_size)
 
     # generate dataloader
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
@@ -130,7 +130,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
         running_val_loss = 0
         with torch.no_grad():       # ensures that no gradients are computed
 
-            for i, (batch_img, degradation_value) in enumerate(val_loader):
+            for i, (batch_img, degradation_value) in enumerate(tqdm(val_loader, desc=f"epoch: {epoch}")):
                 batch_img = batch_img.to(torch.float32).to(DEVICE)
                 degradation_value = degradation_value.to(torch.float32).to(DEVICE)
 
