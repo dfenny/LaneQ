@@ -13,7 +13,7 @@ from .utils.preprocessing import apply_img_preprocessing
 def load_saved_model(model_name, saved_weight_path,  **kwargs):
     model = get_model(model_name, **kwargs)       # initialize model
     model.load_state_dict((torch.load(saved_weight_path, weights_only=True)))   # load weights
-    print("Saved weights loaded")
+    # print("Saved weights loaded")
     return model
 
 
