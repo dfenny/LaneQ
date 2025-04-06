@@ -2,7 +2,8 @@ enable_cuda: TRUE
 
 model:
     in_channels: 3
-    out_dim: 1
+    # out_dim: 1 # 1 for regression
+    out_dim: 3 # 3 for classification
 
 # Placeholder hyperparameters
 training:
