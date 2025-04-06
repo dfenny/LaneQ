@@ -60,6 +60,9 @@ def filter_connected_components(label_mask, roi_points, min_area=100, min_roi_ov
 
     # Calculate area(frequency) of labels in label_mask and inside_roi
     label_count = len(np.unique(label_mask))
+    if label_count == 1:
+        return label_mask
+
     orig_area = np.bincount(label_mask.ravel(), minlength=label_count)
     inside_roi_area = np.bincount(inside_roi.ravel(), minlength=label_count)
     orig_area = np.delete(orig_area, 0)     # remove 0 for background
@@ -71,7 +74,7 @@ def filter_connected_components(label_mask, roi_points, min_area=100, min_roi_ov
     valid_labels = (orig_area > min_area) & ((inside_roi_area / orig_area) >= min_roi_overlap)
     labels = np.arange(1, label_count)
     valid_labels = labels[valid_labels]    # get list of valid connect component labels
-
+    
     # set invalid labels/connected components to zero
     label_mask = np.where(np.isin(label_mask, valid_labels), label_mask, 0)
     return label_mask
@@ -188,7 +191,7 @@ def add_bbox(img, bbox, label=None, bbox_color=(255, 255, 255), bbox_thickness=2
         lrect_pt2 = x1 + w, y1 - bbox_thickness
         img = cv2.rectangle(img=img, pt1=lrect_pt1, pt2=lrect_pt2, color=bbox_color, thickness=-1)
         img = cv2.putText(img=img, text=label, org=(x1, y1 - bbox_thickness), fontFace=_FONT, fontScale=font_scale,
-                          color=text_color, thickness=1)
+                          color=text_color, thickness=2)
 
     return img
 

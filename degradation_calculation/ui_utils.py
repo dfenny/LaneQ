@@ -325,7 +325,7 @@ class RegDataFilterUI:
         return groups
 
     def load_new_image(self, b, increment=1):
-
+        
         if self.random_flag:
             filename = random.choice(self.img_list)
             self.pos_counter = self.img_list.index(filename)
@@ -412,7 +412,7 @@ class RegDataFilterUI:
             bbox = hp.box_coco_to_corner(bbox)
             color = _color_map.get(target, (255, 255, 255))
             annoted_img = hp.add_bbox(img=annoted_img, bbox=bbox, label=f"{idx}:{round(ratio, 3)}", font_scale=0.9,
-                                      bbox_color=color, text_color=(0, 0, 255))
+                                      bbox_color=color, text_color=(0, 0, 0))
 
         return annoted_img
 
