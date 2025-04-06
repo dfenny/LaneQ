@@ -54,4 +54,5 @@ class CNN_SPPF(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)  
 
-        return self.sigmoid(x) # Output the regression value
+        # return self.sigmoid(x) # Output the regression value
+        return x  # For classification, not activation since loss function takes care of it
