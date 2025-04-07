@@ -82,7 +82,7 @@ def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_
         image_transformations = transform
         
     # initialize dataset object
-    dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv, subset_size=subset_size)
+    # dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv, subset_size=subset_size)
     dataset = ClassificationDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv,
                                     transform=transform)
 
@@ -193,14 +193,15 @@ def cal_regression_metrics(model, data_loader):
 
     return {"MSE": mse, "MAE": mae, "R2": r2}
 
-def cal_classification_metrics(model, data_loader, num_classes):
+
+def cal_classification_metrics(model, data_loader, num_classes=3):
     global DEVICE
     model.to(DEVICE).eval()
 
     y_true, y_pred = [], []
 
     with torch.no_grad():
-        for batch_img, batch_target in tqdm(data_loader):
+        for batch_img, batch_target in data_loader:
             batch_img = batch_img.to(torch.float32).to(DEVICE)
             batch_target = batch_target.to(torch.long).to(DEVICE)  # Ensure targets are LongTensor for classification
 
@@ -218,14 +219,15 @@ def cal_classification_metrics(model, data_loader, num_classes):
     recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
     f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
     cm = confusion_matrix(y_true, y_pred)
-    metrics = {
-        'accuracy': round(accuracy, 4),
-        'precision': round(precision, 4),
-        'recall': round(recall, 4),
-        'f1': round(f1, 4)
+
+    return {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'confusion_matrix': cm
     }
 
-    return metrics, cm
 
 def main(model_name, config):
 
