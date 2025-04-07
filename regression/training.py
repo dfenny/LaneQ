@@ -36,7 +36,6 @@ def load_config(config_path):
 
 
 def visualize_learning_curve(history, save_path, timestamp=""):
-
     plt.figure()
     plt.plot(history["train_loss"], label="train loss")
     plt.plot(history["val_loss"], label="val loss")
@@ -57,8 +56,8 @@ def visualize_learning_curve(history, save_path, timestamp=""):
     print(f"   Learning history saved to {fn}")
 
 
-def generate_basic_dataloader(image_dir, degradation_values_csv, preprocess_config, batch_size, num_workers, shuffle=True, transform=None):
-
+def generate_basic_dataloader(image_dir, degradation_values_csv, preprocess_config, batch_size, num_workers,
+                              shuffle=True, transform=None):
     # get required image transformation object
     resize_width, resize_height = preprocess_config["resize_width"], preprocess_config["resize_height"]
     if transform is None:
@@ -76,23 +75,24 @@ def generate_basic_dataloader(image_dir, degradation_values_csv, preprocess_conf
     return dataloader, len(dataset)
 
 
-def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_workers, shuffle=True, transform=None, subset_size=None):
-
+def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_workers, shuffle=True, transform=None,
+                             subset_size=None):
     if transform is not None:
         image_transformations = transform
-        
+
     # initialize dataset object
-    # dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv, subset_size=subset_size)
+    dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv,
+                                subset_size=subset_size)
     dataset = ClassificationDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv,
                                     transform=transform)
 
     # generate dataloader
-    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn)
+    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
+                            collate_fn=collate_fn)
     return dataloader, len(dataset)
 
 
 def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, save_path=".", checkpoint_freq=0):
-
     global DEVICE
 
     # ensure all necessary folders are available
@@ -119,19 +119,19 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
             batch_img = batch_img.to(torch.float32).to(DEVICE)
             degradation_value = degradation_value.to(torch.float32).to(DEVICE)
 
-            optimizer.zero_grad()               # set gradients to zero
+            optimizer.zero_grad()  # set gradients to zero
             logits = model(batch_img)
             loss = loss_fn(logits, degradation_value)
-            loss.backward()                     # calculate gradients
-            optimizer.step()                    # take a step in optimization process
+            loss.backward()  # calculate gradients
+            optimizer.step()  # take a step in optimization process
             running_train_loss += loss.item()
 
-        epoch_train_loss = running_train_loss / total_train_batch   # average loss
+        epoch_train_loss = running_train_loss / total_train_batch  # average loss
 
         # check performance on validation set
         model.eval()  # Set the model to evaluation mode
         running_val_loss = 0
-        with torch.no_grad():       # ensures that no gradients are computed
+        with torch.no_grad():  # ensures that no gradients are computed
 
             for i, (batch_img, degradation_value) in enumerate(tqdm(val_loader, desc=f"epoch: {epoch}")):
                 batch_img = batch_img.to(torch.float32).to(DEVICE)
@@ -141,7 +141,7 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
                 loss = loss_fn(logits, degradation_value)
                 running_val_loss += loss.item()
 
-        epoch_val_loss = running_val_loss / total_val_batch     # average loss
+        epoch_val_loss = running_val_loss / total_val_batch  # average loss
 
         # store to plot learning curve
         history["train_loss"].append(epoch_train_loss)
@@ -149,16 +149,16 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
 
         epoch_toc = time.time()
 
-        print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f}, "
+        print(f"Epoch [{epoch + 1}/{num_epochs}], Train Loss: {epoch_train_loss:.4f}, Val Loss: {epoch_val_loss:.4f}, "
               f"Epoch execution time: {round(epoch_toc - epoch_tic, 2)} sec")
 
-        if checkpoint_freq > 0 and (epoch+1) % checkpoint_freq == 0:
-            path = os.path.join(checkpoint_path, f"cnn_sppf_checkpoint_epoch_{epoch+1}.pth")
+        if checkpoint_freq > 0 and (epoch + 1) % checkpoint_freq == 0:
+            path = os.path.join(checkpoint_path, f"cnn_sppf_checkpoint_epoch_{epoch + 1}.pth")
             torch.save(model.state_dict(), path)
 
     # Saving the final model
-    current_time = time.localtime()    # Get current time
-    timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', current_time)   # Format as 'YYYY-MM-DD_HH-MM-SS'
+    current_time = time.localtime()  # Get current time
+    timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', current_time)  # Format as 'YYYY-MM-DD_HH-MM-SS'
     path = os.path.join(checkpoint_path, f"cnn_sppf_final_{timestamp}.pth")
     torch.save(model.state_dict(), path)
     main_toc = time.time()
@@ -167,13 +167,13 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
     visualize_learning_curve(history=history, save_path=train_log_path, timestamp=timestamp)
 
     print(f"Model saved at: {path}")
-    print(f"Training Completed! Total time: {round((main_toc-main_tic)/60, 4)} min")
+    print(f"Training Completed! Total time: {round((main_toc - main_tic) / 60, 4)} min")
 
 
 def cal_regression_metrics(model, data_loader):
     global DEVICE
     model.to(DEVICE).eval()
-    
+
     y_true, y_pred = [], []
 
     with torch.no_grad():
@@ -194,22 +194,22 @@ def cal_regression_metrics(model, data_loader):
     return {"MSE": mse, "MAE": mae, "R2": r2}
 
 
-def cal_classification_metrics(model, data_loader, num_classes=3):
+def cal_classification_metrics(model, data_loader, num_classes):
     global DEVICE
     model.to(DEVICE).eval()
 
     y_true, y_pred = [], []
 
     with torch.no_grad():
-        for batch_img, batch_target in data_loader:
+        for batch_img, batch_target in tqdm(data_loader):
             batch_img = batch_img.to(torch.float32).to(DEVICE)
             batch_target = batch_target.to(torch.long).to(DEVICE)  # Ensure targets are LongTensor for classification
 
-            logits = model(batch_img)   # Forward pass through the model
+            logits = model(batch_img)  # Forward pass through the model
             probs = F.softmax(logits, dim=1)  # Apply softmax to get probabilities (one-hot encoded format)
-            preds = torch.argmax(probs, dim=1)   # Get predicted class (argmax)
+            preds = torch.argmax(probs, dim=1)  # Get predicted class (argmax)
 
-            batch_target = torch.argmax(batch_target, dim=1)   # Convert one-hot target to class indices
+            batch_target = torch.argmax(batch_target, dim=1)  # Convert one-hot target to class indices
             y_true.extend(batch_target.cpu().numpy())
             y_pred.extend(preds.cpu().numpy())
 
@@ -219,18 +219,17 @@ def cal_classification_metrics(model, data_loader, num_classes=3):
     recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
     f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
     cm = confusion_matrix(y_true, y_pred)
-
-    return {
-        'accuracy': accuracy,
-        'precision': precision,
-        'recall': recall,
-        'f1': f1,
-        'confusion_matrix': cm
+    metrics = {
+        'accuracy': round(accuracy, 4),
+        'precision': round(precision, 4),
+        'recall': round(recall, 4),
+        'f1': round(f1, 4)
     }
+
+    return metrics, cm
 
 
 def main(model_name, config):
-
     global DEVICE
 
     # ensure all necessary folders are available
@@ -248,15 +247,17 @@ def main(model_name, config):
 
     # generate train data loader
     train_loader, train_size = generate_sppf_dataloader(image_dir=dataset_config["train"]["img_dir"],
-                                               degradation_values_csv=dataset_config["train"]["degradation_values_csv"],
-                                               batch_size=train_config["batch_size"],
-                                               num_workers=train_config["num_workers"], transform=None)
+                                                        degradation_values_csv=dataset_config["train"][
+                                                            "degradation_values_csv"],
+                                                        batch_size=train_config["batch_size"],
+                                                        num_workers=train_config["num_workers"], transform=None)
 
     # generate validation data loader
     val_loader, val_size = generate_sppf_dataloader(image_dir=dataset_config["val"]["img_dir"],
-                                           degradation_values_csv=dataset_config["val"]["degradation_values_csv"],
-                                           batch_size=train_config["batch_size"],
-                                           num_workers=train_config["num_workers"], transform=None)
+                                                    degradation_values_csv=dataset_config["val"][
+                                                        "degradation_values_csv"],
+                                                    batch_size=train_config["batch_size"],
+                                                    num_workers=train_config["num_workers"], transform=None)
 
     print(f"Train Dataset loaded. #samples: {train_size}")
     print(f"Validation Dataset loaded. #samples: {val_size}")
@@ -288,7 +289,6 @@ def main(model_name, config):
 
 
 if __name__ == '__main__':
-
     # Parsing the command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='cnn_sppf', help='Model architecture to use')
