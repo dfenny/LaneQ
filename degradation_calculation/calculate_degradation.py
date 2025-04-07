@@ -12,10 +12,10 @@ import pandas as pd
 
 
 # Import this if running /inference.py
-# from . import degradation_utils as hp
+from . import degradation_utils as hp
 
 # import this if running anything else
-import degradation_utils as hp
+# import degradation_utils as hp
 
 def fetch_all_components_degradation(gray_img, label_mask, dilate_kernel=13, comp_len_limit=100, sub_comp_len=80,
                           relax_threshold=0.05):

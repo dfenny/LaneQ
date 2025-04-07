@@ -2,12 +2,12 @@ import torch
 import torch.nn.functional as F
 
 # Import these if running /regression/Regression_train_inference.ipynb
-from models import get_model
-from utils.preprocessing import apply_img_preprocessing
+# from models import get_model
+# from utils.preprocessing import apply_img_preprocessing
 
 # Import these if running /inference.py
-# from .models import get_model
-# from .utils.preprocessing import apply_img_preprocessing
+from .models import get_model
+from .utils.preprocessing import apply_img_preprocessing
 
 
 def load_saved_model(model_name, saved_weight_path,  **kwargs):
@@ -33,6 +33,8 @@ def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=Fa
         test_batch = test_batch.to(device)
         output = model(test_batch)
 
-        pred_value = output.squeeze().cpu().item()
+        # print(output)
+        # pred_value = output.squeeze().cpu().item()
+        pred_value = output.argmax().item()
 
     return pred_value
