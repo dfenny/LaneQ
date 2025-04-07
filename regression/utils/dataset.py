@@ -65,8 +65,8 @@ class ClassificationDataset(Dataset):
 
         if self.transform:
             image = self.transform(image)
-
-        image = ToTensor()(image)
+        else:
+            image = ToTensor()(image)
 
         return image, degradation_target
 
