@@ -11,7 +11,7 @@ from segmentation.utils.preprocessing import load_image
 from segmentation.inference import load_saved_model as load_saved_segmentation_model, pred_segmentation_mask
 from regression.inference import load_saved_model as load_saved_regression_model, pred_degradation_value
 
-from degradation_calculation.calculate_degradation import generate_individual_segments_and_dict
+from degradation_calculation.calculate_degradation import generate_individual_segments_and_dict, generate_individual_segments_and_dict_v2
 
 
 def run_inference(input_image: str, 
@@ -69,20 +69,28 @@ def run_inference(input_image: str,
     cv2.imwrite(mask_path, predicted_mask)
     
     # Generate segment annotations
-    annotations_dict = generate_individual_segments_and_dict(img=input_img, mask=predicted_mask, filename=filename)
-    
+    annotations_dict = generate_individual_segments_and_dict_v2(img=input_img, mask=predicted_mask, filename=filename)
+
     # Run regression model on each segment
     for segment in annotations_dict["annotations"]:
         x, y, w, h = segment["bounding_box"]
-        segment_img = input_img[y:y+h, x:x+w]
+        # segment_img = input_img[y:y+h, x:x+w]
+        segment_img = segment["segment_crop"]
         
         # Do not pass small segments into the regression model
-        if segment_img.shape[0] < 10 or segment_img.shape[1] < 10:
+        if w < 10 or h < 10:
             continue
         
         degradation_value = pred_degradation_value(model=regression_model, test_img=segment_img, img_transform=None, add_batch_dim=True, device=DEVICE)
         segment["degradation"] = degradation_value
-    
+
+    new_annot = []
+    for annot in annotations_dict["annotations"]:
+        del annot['segment_crop']
+        new_annot.append(annot.copy())
+
+    annotations_dict["annotations"] = new_annot.copy()
+
     # Save JSON file
     json_path = os.path.join(output_dir, f"{filename_without_ext}.json")
     with open(json_path, "w") as f:
