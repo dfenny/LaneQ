@@ -68,7 +68,7 @@ def run_inference(input_image: str,
     # Make a folder for every image
     os.makedirs(output_dir + "/" + filename_without_ext, exist_ok=True)
 
-    mask_path = os.path.join(output_dir + "/" + filename_without_ext, f"{filename_without_ext}_mask.jpg")
+    mask_path = os.path.join(output_dir + "/" + filename_without_ext, f"{filename_without_ext}_mask.png")
     cv2.imwrite(mask_path, predicted_mask)
     
     # Generate segment annotations
