@@ -11,17 +11,18 @@ import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from tqdm.notebook import tqdm
 
 # Import these if running /regression/Regression_train_inference.ipynb
-# from models import get_model
-# from utils.dataset import RegressionDataset
-# from utils.preprocessing import get_img_transform
+from models import get_model
+from utils.dataset import RegressionDataset, ClassificationDataset, collate_fn
+from utils.preprocessing import get_img_transform
 
-# Import these if running /inference.py
-from .models import get_model
-from .utils.dataset import RegressionDataset
-from .utils.preprocessing import get_img_transform
+# # Import these if running /inference.py
+# from .models import get_model
+# from .utils.dataset import RegressionDataset
+# from .utils.preprocessing import get_img_transform
 
 
 # global variable
@@ -82,9 +83,11 @@ def generate_sppf_dataloader(image_dir, degradation_values_csv, batch_size, num_
         
     # initialize dataset object
     dataset = RegressionDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv, subset_size=subset_size)
+    dataset = ClassificationDataset(image_dir=image_dir, degradation_values_csv=degradation_values_csv,
+                                    transform=transform)
 
     # generate dataloader
-    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=collate_fn)
     return dataloader, len(dataset)
 
 
@@ -189,6 +192,40 @@ def cal_regression_metrics(model, data_loader):
     r2 = r2_score(y_true, y_pred)
 
     return {"MSE": mse, "MAE": mae, "R2": r2}
+
+def cal_classification_metrics(model, data_loader, num_classes):
+    global DEVICE
+    model.to(DEVICE).eval()
+
+    y_true, y_pred = [], []
+
+    with torch.no_grad():
+        for batch_img, batch_target in tqdm(data_loader):
+            batch_img = batch_img.to(torch.float32).to(DEVICE)
+            batch_target = batch_target.to(torch.long).to(DEVICE)  # Ensure targets are LongTensor for classification
+
+            logits = model(batch_img)   # Forward pass through the model
+            probs = F.softmax(logits, dim=1)  # Apply softmax to get probabilities (one-hot encoded format)
+            preds = torch.argmax(probs, dim=1)   # Get predicted class (argmax)
+
+            batch_target = torch.argmax(batch_target, dim=1)   # Convert one-hot target to class indices
+            y_true.extend(batch_target.cpu().numpy())
+            y_pred.extend(preds.cpu().numpy())
+
+    # Calculate metrics
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+    recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+    f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+    cm = confusion_matrix(y_true, y_pred)
+    metrics = {
+        'accuracy': round(accuracy, 4),
+        'precision': round(precision, 4),
+        'recall': round(recall, 4),
+        'f1': round(f1, 4)
+    }
+
+    return metrics, cm
 
 def main(model_name, config):
 
