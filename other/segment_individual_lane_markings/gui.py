@@ -1,12 +1,12 @@
 from segment import *
 import tkinter as tk
-from tkinter import Label
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 # Index tracker
 current_index = 29
+
 
 # Tkinter window
 root = tk.Tk()
@@ -22,29 +22,31 @@ def plot_image_and_annotations(img, objects, polygons, mask, index):
 
     # Show the image
     ax.imshow(img)
-    ax.imshow(mask, cmap="Reds", alpha=0.5)
+    if plot_new_masks.get():
+        ax.imshow(mask, cmap="Reds", alpha=0.5)
 
-    # Store handles for legend
-    # legend_handles = []
+    if plot_original_annotations.get():
+        # Store handles for legend
+        legend_handles = []
 
-    # # Extract lane markings and plot them
-    # for obj in objects:
-    #     points = [(p[0], p[1], p[2]) for p in obj["poly2d"]]
-    #     xs, ys = construct_line(points)
-    #     color = lane_colors.get(obj["category"], "red")
-    #     line, = ax.plot(xs, ys, '--', label=obj["category"], color=color, lw=1)
+        # Extract lane markings and plot them
+        for obj in objects:
+            points = [(p[0], p[1], p[2]) for p in obj["poly2d"]]
+            xs, ys = construct_line(points)
+            color = lane_colors.get(obj["category"], "red")
+            line, = ax.plot(xs, ys, '--', label=obj["category"], color=color, lw=1)
 
-    #     # Only add to legend if not already included
-    #     if obj["category"] not in [handle.get_label() for handle in legend_handles]:
-    #         legend_handles.append(line)
+            # Only add to legend if not already included
+            if obj["category"] not in [handle.get_label() for handle in legend_handles]:
+                legend_handles.append(line)
 
-    # # Plot polygons
-    # for polygon, lane_type in polygons.items():
-    #     x, y = polygon.exterior.xy
-    #     color = lane_colors.get(lane_type, "red")
-    #     ax.fill(x, y, color=color, alpha=0.5)
+        # # Plot polygons
+        # for polygon, lane_type in polygons.items():
+        #     x, y = polygon.exterior.xy
+        #     color = lane_colors.get(lane_type, "red")
+        #     ax.fill(x, y, color=color, alpha=0.5)
 
-    # ax.legend(handles=legend_handles, loc="upper right", fontsize=8, title="Lane Markings")
+        ax.legend(handles=legend_handles, loc="upper right", fontsize=8, title="Lane Markings")
 
     ax.set_title(f"Image {index+1}/{len(image_files)}: {image_files[index]}")
     ax.set_xticks([])
@@ -94,6 +96,24 @@ prev_button.pack(side=tk.LEFT, padx=5, pady=5)
 
 next_button = tk.Button(frame_buttons, text="Next Photo", command=next_image)
 next_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+plot_original_annotations = tk.IntVar()
+show_annotations_chkbx = tk.Checkbutton(
+    frame_buttons,
+    text="Show original annotations",
+    variable=plot_original_annotations,
+    command=lambda: load_image_and_annotations(current_index)
+)
+show_annotations_chkbx.pack(side=tk.LEFT, padx=5, pady=5)
+
+plot_new_masks = tk.IntVar(value=1)
+show_masks_chkbx = tk.Checkbutton(
+    frame_buttons,
+    text="Show generated masks",
+    variable=plot_new_masks,
+    command=lambda: load_image_and_annotations(current_index)
+)
+show_masks_chkbx.pack(side=tk.LEFT, padx=5, pady=5)
 
 # Spacer on the right
 right_spacer = tk.Frame(frame_buttons)
