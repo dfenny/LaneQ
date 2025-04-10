@@ -33,6 +33,8 @@ def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=Fa
         test_batch = test_batch.to(device)
         output = model(test_batch)
 
-        pred_value = output.squeeze().cpu().item()
+        # print(output)
+        # pred_value = output.squeeze().cpu().item()
+        pred_value = output.argmax().item()
 
     return pred_value
