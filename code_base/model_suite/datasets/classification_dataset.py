@@ -30,7 +30,7 @@ class ClassificationDataset(Dataset):
 
         # Load regression target
         degradation_target = torch.tensor(self.data.iloc[idx, 1], dtype=torch.long)
-        degradation_target = one_hot(degradation_target, num_classes=self.num_classes)
+        degradation_target = one_hot(degradation_target, num_classes=self.num_classes).float()
 
         if self.transform:
             image = self.transform(image)
