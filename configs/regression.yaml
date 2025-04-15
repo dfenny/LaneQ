@@ -1,0 +1,39 @@
+enable_cuda: TRUE
+
+
+model:
+    in_channels: 3
+    out_dim: 1
+
+
+# dataset location and related parameters
+dataset_loc:
+    dataset_type: 'regression'   # type of data been fetched
+    train:
+        img_dir: /cs6945share/retro_project/bdd100k/images/train
+        degradation_csv: /cs6945share/retro_project/bdd100k/generated_segments/train.csv
+        random_subset: null     # set size of random subset to use else null for entire dataset
+    val:
+        img_dir: /cs6945share/retro_project/bdd100k/images/val
+        degradation_csv: /cs6945share/retro_project/bdd100k/generated_segments/val.csv
+        random_subset: null     # set size of random subset to use else null for entire dataset
+
+
+# pytorch dataloader parameters
+data_loader:
+    batch_size: 1
+    num_workers: 2
+    shuffle: TRUE
+
+
+# training related hyperparameters
+training:
+    num_epochs: 10
+    learning_rate: 0.05
+    resume_checkpoint: null      # should be path for checkpoint .pth file or null
+    save_checkpoint_freq: 5      # freq to save checkpoint wrt to epoch count. Set to 0 if no check points needs to saved
+    loss_fn_name: 'MSE'             # options: BCE, CrossEntropy, FocalLoss, MSE
+
+
+# location where model train results needs to be saved
+results_loc: ./experiment_results/
