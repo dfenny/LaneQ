@@ -191,3 +191,7 @@ regression/experiment_results/*
 # to ignore all files under regression/data folder except README.md
 regression/data/*
 !regression/data/README.md
+
+# to ignore all files under regression/data folder except README.md
+experiment_results/*
+!experiment_results/README.md
