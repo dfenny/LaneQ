@@ -6,6 +6,40 @@ import json
 
 def generate_dataloader(dataset_type, data_loc, dataloader_config, preprocess_config=None, img_transform=None,
                         num_class=3):
+    """
+    Create a PyTorch DataLoader for a specified dataset type.
+
+    Parameters
+    ----------
+    dataset_type : str
+        One of {'segmentation', 'regression', 'classification'}. Determines which Dataset subclass to use.
+    data_loc : dict
+        Paths and settings for the data:
+          - segmentation: keys 'img_dir', 'mask_dir', optional 'random_subset'
+          - regression/classification: keys 'img_dir', 'degradation_csv', optional 'random_subset'
+    dataloader_config : dict
+        Configuration for DataLoader:
+          - 'batch_size' (int)
+          - 'num_workers' (int)
+          - shuffle is set based on 'shuffle' key if present
+    preprocess_config : dict, optional
+        Preprocessing options for segmentation:
+          - 'resize_width' (int), 'resize_height' (int)
+          - 'RGB_mask' (bool), 'RGB_labelmap' (str path to JSON)
+          - 'one_hot_mask' (bool), 'num_classes' (int)
+    img_transform : callable, optional
+        A torchvision-compatible transform to apply to images after loading.
+    num_class : int, default=3
+        Number of classes for classification one-hot encoding.
+
+    Returns
+    -------
+    tuple or None
+        If a valid dataset_type is provided, returns a tuple:
+          - DataLoader: configured DataLoader instance
+          - int: total number of samples in the dataset
+        Otherwise, returns None.
+    """
     dataset = None
     if dataset_type == 'segmentation':
 
@@ -18,11 +52,11 @@ def generate_dataloader(dataset_type, data_loc, dataloader_config, preprocess_co
             mask_reshape = (resize_width, resize_height)
 
         label_map = None
-        if preprocess_config["RGB_mask"]:
+        if preprocess_config.get("RGB_mask", False):
             try:
                 with open(preprocess_config["RGB_labelmap"], 'r') as json_file:
                     label_map = json.load(json_file)
-            except Exception as e:
+            except Exception:
                 print("Error loading labelmap")
                 label_map = None
 

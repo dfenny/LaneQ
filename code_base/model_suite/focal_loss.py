@@ -1,5 +1,3 @@
-# Code referred from: https://github.com/itakurah/Focal-loss-PyTorch/tree/main
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,11 +7,20 @@ class FocalLoss(nn.Module):
     def __init__(self, gamma=2, alpha=None, reduction='mean', task_type='binary', num_classes=None):
         """
         Unified Focal Loss class for binary, multi-class, and multi-label classification tasks.
-        :param gamma: Focusing parameter, controls the strength of the modulating factor (1 - p_t)^gamma
-        :param alpha: Balancing factor, can be a scalar or a tensor for class-wise weights. If None, no class balancing is used.
-        :param reduction: Specifies the reduction method: 'none' | 'mean' | 'sum'
-        :param task_type: Specifies the type of task: 'binary', 'multi-class', or 'multi-label'
-        :param num_classes: Number of classes (only required for multi-class classification)
+
+        Parameters
+        ----------
+        gamma : float, default=2
+            Focusing parameter, controls the strength of the modulating factor (1 - p_t)^gamma.
+        alpha : float or tensor or list, optional
+            Balancing factor. For binary/multi-label, a scalar in [0,1]. For multi-class, a
+            tensor or list of per-class weights. If None, no class balancing is applied.
+        reduction : {'none', 'mean', 'sum'}, default='mean'
+            Specifies the reduction to apply to the output: no reduction, mean or sum.
+        task_type : {'binary', 'multi-class', 'multi-label'}, default='binary'
+            Type of classification task for which to compute the loss.
+        num_classes : int, optional
+            Number of classes; required if task_type=='multi-class' and alpha is provided.
         """
         super(FocalLoss, self).__init__()
         self.gamma = gamma
@@ -32,16 +39,26 @@ class FocalLoss(nn.Module):
 
     def forward(self, inputs, targets):
         """
-        Forward pass to compute the Focal Loss based on the specified task type.
-        :param inputs: Predictions (logits) from the model.
-                       Shape:
-                         - binary/multi-label: (batch_size, num_classes)
-                         - multi-class: (batch_size, num_classes)
-        :param targets: Ground truth labels.
-                        Shape:
-                         - binary: (batch_size,)
-                         - multi-label: (batch_size, num_classes)
-                         - multi-class: (batch_size,)
+        Compute the focal loss.
+
+        Dispatches to the appropriate method based on self.task_type.
+
+        Parameters
+        ----------
+        inputs : Tensor
+            Model outputs (logits). Shape:
+            - binary/multi-label: (batch_size, num_classes)
+            - multi-class:         (batch_size, num_classes)
+        targets : Tensor
+            Ground truth labels. Shape:
+            - binary:      (batch_size,)
+            - multi-label:(batch_size, num_classes)
+            - multi-class:(batch_size,) or one-hot of shape (batch_size, num_classes)
+
+        Returns
+        -------
+        Tensor
+            Loss value per sample or reduced according to `self.reduction`.
         """
         if self.task_type == 'binary':
             return self.binary_focal_loss(inputs, targets)
@@ -54,7 +71,21 @@ class FocalLoss(nn.Module):
                 f"Unsupported task_type '{self.task_type}'. Use 'binary', 'multi-class', or 'multi-label'.")
 
     def binary_focal_loss(self, inputs, targets):
-        """ Focal loss for binary classification. """
+        """
+        Focal loss for binary classification.
+
+        Parameters
+        ----------
+        inputs : Tensor
+            Logits of shape (batch_size,).
+        targets : Tensor
+            Binary labels of shape (batch_size,), values in {0,1}.
+
+        Returns
+        -------
+        Tensor
+            Loss values reduced according to `self.reduction`.
+        """
         probs = torch.sigmoid(inputs)
         targets = targets.float()
 
@@ -80,7 +111,21 @@ class FocalLoss(nn.Module):
         return loss
 
     def multi_class_focal_loss(self, inputs, targets):
-        """ Focal loss for multi-class classification. """
+        """
+        Focal loss for multi-class classification.
+
+        Parameters
+        ----------
+        inputs : Tensor
+            Logits of shape (batch_size, num_classes).
+        targets : Tensor
+            One-hot encoded targets of shape (batch_size, num_classes).
+
+        Returns
+        -------
+        Tensor
+            Loss values reduced according to `self.reduction`.
+        """
         if self.alpha is not None:
             alpha = self.alpha.to(inputs.device)
 
@@ -114,7 +159,21 @@ class FocalLoss(nn.Module):
         return loss
 
     def multi_label_focal_loss(self, inputs, targets):
-        """ Focal loss for multi-label classification. """
+        """
+        Focal loss for multi-label classification.
+
+        Parameters
+        ----------
+        inputs : Tensor
+            Logits of shape (batch_size, num_classes).
+        targets : Tensor
+            Binary indicator tensor of shape (batch_size, num_classes).
+
+        Returns
+        -------
+        Tensor
+            Loss values reduced according to `self.reduction`.
+        """
         probs = torch.sigmoid(inputs)
 
         # Compute binary cross entropy
