@@ -122,5 +122,8 @@ class DegradationDetector:
         return {"save_path": save_path}
 
 
+if __name__ == "__main__":
 
+    # to do - need to complete this part to enable command line access
+    pass
 
