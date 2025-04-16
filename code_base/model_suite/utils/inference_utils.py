@@ -91,7 +91,7 @@ def pred_segmentation_mask(model, test_img, img_transform=None, add_batch_dim=Fa
     return pred_labels
 
 
-def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=False, device="cpu"):
+def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=False, device="cpu", precision=4):
 
     model = model.to(device)   # ensure model is on same device as test data
 
@@ -106,7 +106,7 @@ def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=Fa
         output = model(test_batch)
         pred_value = output.squeeze().cpu().item()
 
-    return pred_value
+    return round(pred_value, precision)
 
 
 def pred_degradation_category(model, test_img, img_transform=None, add_batch_dim=False, device="cpu"):

@@ -53,7 +53,7 @@ def cal_regression_metrics(model, data_loader, device="cpu"):
     model.to(device).eval()
     y_true, y_pred = [], []
     with torch.no_grad():
-        for batch_img, batch_target in data_loader:
+        for batch_img, batch_target in tqdm(data_loader):
             batch_img = batch_img.to(torch.float32).to(device)
             batch_target = batch_target.to(torch.float32).to(device)
 
