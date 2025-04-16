@@ -31,7 +31,7 @@ def get_loss(loss_fn_name, **kwargs):
     return _loss_fn_map[loss_fn_name](**kwargs)
 
 
-def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, save_path=".", checkpoint_freq=0):
+def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, save_path=".", checkpoint_freq=0, save_prefix=None):
 
     global DEVICE
 
@@ -92,13 +92,17 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
               f"Epoch execution time: {round((epoch_toc-epoch_tic)/60, 2)} min")
 
         if checkpoint_freq > 0 and (epoch+1) % checkpoint_freq == 0:
-            path = os.path.join(checkpoint_path, f"unet_checkpoint_epoch_{epoch+1}.pth")
+            prefix = "model_" if save_prefix is None else f"{save_prefix}_"
+            fn = f"{prefix}checkpoint_epoch_{epoch+1}.pth"
+            path = os.path.join(checkpoint_path, fn)
             torch.save(model.state_dict(), path)
 
     # Saving the final model
     current_time = time.localtime()    # Get current time
     timestamp = time.strftime('%Y-%m-%d_%H-%M-%S', current_time)   # Format as 'YYYY-MM-DD_HH-MM-SS'
-    path = os.path.join(checkpoint_path, f"unet_final_{timestamp}.pth")
+    prefix = "model_" if save_prefix is None else f"{save_prefix}_"
+    fn = f"{prefix}final_{timestamp}.pth"
+    path = os.path.join(checkpoint_path, fn)
     torch.save(model.state_dict(), path)
     main_toc = time.time()
 
@@ -183,8 +187,8 @@ def main(model_name, config):
 
         train_losses = cal_regression_metrics(model, train_loader)
         val_losses = cal_regression_metrics(model, val_loader)
-        print(f"Train Loss: {train_losses}")
-        print(f"Validation Loss: {val_losses}")
+        print(f"Train Error: {train_losses}")
+        print(f"Validation Error: {val_losses}")
 
 
 if __name__ == '__main__':
