@@ -1,7 +1,10 @@
 import os
 import cv2
 import json
+import time
+import argparse
 import numpy as np
+import torch
 from torchvision import transforms
 
 from .utils.common import add_bbox, box_coco_to_corner
@@ -124,6 +127,28 @@ class DegradationDetector:
 
 if __name__ == "__main__":
 
-    # to do - need to complete this part to enable command line access
-    pass
+    parser = argparse.ArgumentParser(description="Run inference on an image.")
+    parser.add_argument("image_path", type=str, help="Path to the input image.")
+    parser.add_argument("output_dir", type=str, help="Directory to save output files.")
+    parser.add_argument("--seg_weights", type=str,
+                        default="segmentation/experiment_results/checkpoints/unet_final_2025-04-06_02-50-25.pth",
+                        help="Path to segmentation model weights.")
+    parser.add_argument("--classification_weights", type=str,
+                        default="regression/experiment_results/classification_7april_best_weights/checkpoints/cnn_sppf_checkpoint_epoch_45.pth",
+                        help="Path to classification model weights.")
+
+    args = parser.parse_args()
+
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using DEVICE: {DEVICE}")
+
+    detector_model = DegradationDetector(segmentation_weights_path=args.seg_weights,
+                                         classification_weights_path=args.classification_weights,
+                                         output_dir=args.output_dir)
+
+    tic = time.time()
+    result_path = detector_model.predict(img_path=args.image_path, device=DEVICE)
+    toc = time.time()
+    print(f"Execution time: {round((toc - tic), 4)} sec")
+    print("Pipeline result saved at:", result_path['save_path'])
 
