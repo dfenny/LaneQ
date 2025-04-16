@@ -171,26 +171,26 @@ cython_debug/
 .pypirc
 
 # to ignore all files under data folder except README.md
-segmentation/data/*
-!segmentation/data/README.md
+archive/segmentation/data/*
+!archive/segmentation/data/README.md
 
 # to ignore all files under segementation/experiment_results folder except README.md
-segmentation/experiment_results/*
-!segmentation/experiment_results/README.md
+archive/segmentation/experiment_results/*
+!archive/segmentation/experiment_results/README.md
 
 # to ignore all files under degradation_calculation/output folder except README.md
-degradation_calculation/output/*
-!degradation_calculation/output/README.md
+archive/degradation_calculation/output/*
+!archive/degradation_calculation/output/README.md
 
 # to ignore all files under regression/experiment_results folder except README.md
-regression/experiment_results/*
-!regression/experiment_results/README.md
+archive/regression/experiment_results/*
+!archive/regression/experiment_results/README.md
 
 **/.DS_Store
 
 # to ignore all files under regression/data folder except README.md
-regression/data/*
-!regression/data/README.md
+archive/regression/data/*
+!archive/regression/data/README.md
 
 # to ignore all files under regression/data folder except README.md
 experiment_results/*
