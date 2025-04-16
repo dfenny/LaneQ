@@ -2,6 +2,7 @@ import os
 import time
 import json
 import yaml
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import ConfusionMatrixDisplay
@@ -60,3 +61,70 @@ def visualize_confusion_matrix(train_cm, val_cm, label_names=None, save_path=Non
         plt.savefig(fn, dpi=300, transparent=True)
         plt.close()
         print(f"   Confusion matrix saved at {fn}")
+
+
+def generate_connected_components(binary_img, connectivity=8):
+
+    # Perform connected component analysis
+    # The function returns:
+    #   num_labels: number of labels (including background)
+    #   labels: image where each pixel has a label number
+    #   stats: statistics for each label (e.g., bounding box, area)
+    #         -> top-left-x, top-left-y, width, height, area
+    #   centroids: center of each component
+    num_labels, label_mask, stats, centroids = cv2.connectedComponentsWithStats(binary_img, connectivity=connectivity)
+
+    # keep only bounding box in stats
+    stats = stats[:, :-1]
+
+    return num_labels, label_mask, stats
+
+
+def expand_bbox(coco_bbox, image_width, image_height, padding=10):
+    """
+    Expands the COCO bounding box by adding padding around it.
+
+    Args:
+        coco_bbox (list): Original bounding box in COCO format [x_min, y_min, width, height].
+        image_width (int): The width of the image.
+        image_height (int): The height of the image.
+        padding (int): The amount of padding to add around the bounding box.
+
+    Returns:
+        list: The new expanded bounding box [x_min, y_min, width, height].
+    """
+    # Unpack original bounding box
+    x_min, y_min, width, height = coco_bbox
+
+    # Expand the bounding box by the padding amount
+    x_min_expanded = max(x_min - padding, 0)  # Ensure the x_min is not less than 0
+    y_min_expanded = max(y_min - padding, 0)  # Ensure the y_min is not less than 0
+    width_expanded = min(x_min + width + padding, image_width) - x_min_expanded  # Ensure width doesn't go beyond image
+    height_expanded = min(y_min + height + padding,
+                          image_height) - y_min_expanded  # Ensure height doesn't go beyond image
+
+    # Return the expanded bounding box
+    return [x_min_expanded, y_min_expanded, width_expanded, height_expanded]
+
+
+def box_coco_to_corner(bbox):
+    """Convert from (upper-left, width, height) to (upper-left, bottom-right)"""
+    x1, y1, w, h = bbox
+    x2 = x1 + w
+    y2 = y1 + h
+    boxes = (x1, y1, x2, y2)
+    return boxes
+
+
+def add_bbox(img, bbox, label=None, bbox_color=(255, 255, 255), bbox_thickness=2, text_color=(0, 0, 0), font_scale=1):
+    _FONT = cv2.FONT_HERSHEY_SIMPLEX
+
+    # For bounding box
+    x1, y1, x2, y2 = bbox
+    img = cv2.rectangle(img=img, pt1=(x1, y1), pt2=(x2, y2), color=bbox_color, thickness=bbox_thickness)
+
+    if label is not None:
+        img = cv2.putText(img=img, text=label, org=(x1, y1 - 5), fontFace=_FONT, fontScale=font_scale,
+                          color=text_color, thickness=2, lineType=cv2.LINE_AA)
+
+    return img
