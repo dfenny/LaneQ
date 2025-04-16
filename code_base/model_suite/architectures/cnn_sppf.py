@@ -5,6 +5,18 @@ import torch.nn.functional as F
 class SPPF(nn.Module):
     """Spatial Pyramid Pooling - Fast (SPPF) layer, similar to the YOLO models."""
     def __init__(self, in_channels, out_channels, pool_size=5):
+        """
+        Initialize the SPPF layer.
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels.
+        out_channels : int
+            Number of output channels.
+        pool_size : int, optional
+            Size of the pooling kernel, by default 5.
+        """
         super(SPPF, self).__init__()
         
         mid_channels = in_channels // 2
@@ -14,16 +26,40 @@ class SPPF(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=pool_size, stride=1, padding=pool_size//2)
 
     def forward(self, x):
-        x1 = self.conv1(x) # Step 1: Reduce channels
-        x2 = self.pool(x1) # Step 2: First pooling
-        x3 = self.pool(x2) # Step 3: Second pooling
-        x4 = self.pool(x3) # Step 4: Third pooling
+        """
+        Forward pass of the SPPF layer.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch_size, in_channels, height, width).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, out_channels, height, width).
+        """
+        x1 = self.conv1(x)  # Step 1: Reduce channels
+        x2 = self.pool(x1)  # Step 2: First pooling
+        x3 = self.pool(x2)  # Step 3: Second pooling
+        x4 = self.pool(x3)  # Step 4: Third pooling
         x = torch.cat((x1, x2, x3, x4), dim=1)  # Step 5: Concatenate across channels
-        x = self.conv2(x) # Step 6: Reduce channels again
+        x = self.conv2(x)   # Step 6: Reduce channels again
         return x
 
 class CNN_SPPF(nn.Module):
+    """Convolutional Neural Network with an SPPF layer."""
     def __init__(self, in_channels=3, out_dim=1):
+        """
+        Initialize the CNN_SPPF model.
+
+        Parameters
+        ----------
+        in_channels : int, optional
+            Number of input channels, by default 3.
+        out_dim : int, optional
+            Number of output dimensions, by default 1.
+        """
         super(CNN_SPPF, self).__init__()
         
         # Convolutional layers
@@ -41,6 +77,19 @@ class CNN_SPPF(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        """
+        Forward pass of the CNN_SPPF model.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch_size, in_channels, height, width).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, out_dim).
+        """
         x = F.relu(self.conv1(x))  
         x = F.max_pool2d(x, kernel_size=2, stride=2)
         x = F.relu(self.conv2(x))  

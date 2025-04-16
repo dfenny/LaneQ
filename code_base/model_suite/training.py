@@ -26,13 +26,61 @@ _loss_fn_map = {
 
 
 def get_loss(loss_fn_name, **kwargs):
+    """
+    Retrieve and instantiate a loss function by name.
+
+    Parameters
+    ----------
+    loss_fn_name : str
+        Key identifying the desired loss in `_loss_fn_map` (e.g., "BCE", "CrossEntropy", "MSE", "FocalLoss").
+    **kwargs
+        Forwarded to the loss class constructor (e.g., gamma and alpha for FocalLoss).
+
+    Returns
+    -------
+    torch.nn.modules.loss._Loss
+        An instance of the requested loss function.
+
+    Raises
+    ------
+    ValueError
+        If `loss_fn_name` is not supported.
+    """
     if loss_fn_name not in _loss_fn_map:
         raise ValueError(f"Loss function '{loss_fn_name}' not supported.")
     return _loss_fn_map[loss_fn_name](**kwargs)
 
 
-def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, save_path=".", checkpoint_freq=0, save_prefix=None):
+def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs,
+               save_path=".", checkpoint_freq=0, save_prefix=None):
+    """
+    Execute the training and validation loop for a given model.
 
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The neural network to train.
+    loss_fn : callable
+        Loss function accepting (logits, targets) and returning a scalar loss.
+    optimizer : torch.optim.Optimizer
+        Optimizer to update model parameters.
+    train_loader : DataLoader
+        DataLoader providing training batches (inputs, targets).
+    val_loader : DataLoader
+        DataLoader providing validation batches (inputs, targets).
+    num_epochs : int
+        Number of epochs to train.
+    save_path : str, default='.'
+        Base directory in which to create "checkpoints" and "train_log" subfolders.
+    checkpoint_freq : int, default=0
+        Save a checkpoint every `checkpoint_freq` epochs; if 0, no intermediate checkpoints.
+    save_prefix : str, optional
+        Prefix to prepend to checkpoint filenames.
+
+    Returns
+    -------
+    None
+    """
     global DEVICE
 
     # ensure all necessary folders are available
@@ -114,7 +162,27 @@ def train_loop(model, loss_fn, optimizer, train_loader, val_loader, num_epochs, 
 
 
 def main(model_name, config):
+    """
+    Entry point to set up data, model, and begin training based on a configuration.
 
+    Parameters
+    ----------
+    model_name : str
+        Key to select the model architecture via `get_model`.
+    config : dict
+        Parsed configuration dictionary containing:
+            - 'results_loc': directory for outputs
+            - 'model': model hyperparameters
+            - 'dataset_loc': locations for train/val data
+            - 'data_loader': DataLoader settings
+            - 'dataset_preprocessing': optional preprocessing settings
+            - 'training': training hyperparameters and resume checkpoint
+            - 'enable_cuda': bool to toggle CUDA usage
+
+    Returns
+    -------
+    None
+    """
     global DEVICE
 
     # ensure all necessary folders are available

@@ -1,7 +1,9 @@
-# I suggest we use UNet since it is tried and tested.
-# If you guys have any more suggestions, add them as different .py files in the models directory.
+"""
+unet.py
 
-# Implementation of the UNet architecture, reference: https://paperswithcode.com/method/u-net
+Implementation of the UNet architecture for image segmentation, following the original paper.
+Reference: https://paperswithcode.com/method/u-net
+"""
 
 import torch
 import torch.nn as nn
@@ -9,7 +11,18 @@ import torch.nn.functional as F
 
 
 class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
+    """
+    Double convolution block: (Conv2d => BatchNorm2d => ReLU) * 2.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    mid_channels : int, optional
+        Number of intermediate channels. If None, defaults to out_channels.
+    """
 
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super().__init__()
@@ -25,11 +38,33 @@ class DoubleConv(nn.Module):
         )
 
     def forward(self, x):
+        """
+        Apply the double convolution block.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (N, in_channels, H, W).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (N, out_channels, H, W).
+        """
         return self.double_conv(x)
 
 
 class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
+    """
+    Downscaling block with max pooling followed by double convolution.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    """
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -39,11 +74,35 @@ class Down(nn.Module):
         )
 
     def forward(self, x):
+        """
+        Apply downscaling block.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (N, in_channels, H, W).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (N, out_channels, H/2, W/2).
+        """
         return self.maxpool_conv(x)
 
 
 class Up(nn.Module):
-    """Upscaling then double conv"""
+    """
+    Upscaling block: upsample (bilinear or transpose convolution) then double convolution.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    bilinear : bool, optional
+        If True, use bilinear upsampling; otherwise, use ConvTranspose2d. Default is True.
+    """
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
@@ -56,8 +115,22 @@ class Up(nn.Module):
             self.up = nn.ConvTranspose2d(in_channels , in_channels // 2, kernel_size=2, stride=2)
             self.conv = DoubleConv(in_channels, out_channels)
 
+    def forward(self, x1, x2):
+        """
+        Apply upscaling block by concatenating encoder features with upsampled decoder features.
 
-    def forward(self, x1, x2): # x1 in this line is the decoder input and x2 is the corresponding encoder's output (feature map)
+        Parameters
+        ----------
+        x1 : torch.Tensor
+            Decoder input tensor of shape (N, in_channels, H, W).
+        x2 : torch.Tensor
+            Corresponding encoder feature map tensor of shape (N, out_channels, H*2, W*2).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (N, out_channels, H*2, W*2).
+        """
         x1 = self.up(x1)
         # input is CHW
         diffY = x2.size()[2] - x1.size()[2]
@@ -73,15 +146,74 @@ class Up(nn.Module):
 
 
 class OutConv(nn.Module):
+    """
+    1x1 convolution to map to the desired number of output channels.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    """
+
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
     def forward(self, x):
+        """
+        Apply 1x1 convolution.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (N, in_channels, H, W).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (N, out_channels, H, W).
+        """
         return self.conv(x)
 
 
 class UNet(nn.Module):
+    """
+    UNet model for image segmentation.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input image channels.
+    out_channels : int, optional
+        Number of output segmentation channels. Default is 1.
+    bilinear : bool, optional
+        Whether to use bilinear upsampling. Default is True.
+
+    Attributes
+    ----------
+    inc : DoubleConv
+        Initial convolution block.
+    down1 : Down
+        First downscaling block.
+    down2 : Down
+        Second downscaling block.
+    down3 : Down
+        Third downscaling block.
+    down4 : Down
+        Bottleneck downscaling block.
+    up1 : Up
+        First upscaling block.
+    up2 : Up
+        Second upscaling block.
+    up3 : Up
+        Third upscaling block.
+    up4 : Up
+        Fourth upscaling block.
+    outc : OutConv
+        Final 1x1 convolution block.
+    """
 
     def __init__(self, in_channels, out_channels=1, bilinear=True):
         super(UNet, self).__init__()
@@ -102,6 +234,19 @@ class UNet(nn.Module):
         self.outc = OutConv(64, out_channels)
 
     def forward(self, x):
+        """
+        Forward pass of the UNet.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (N, in_channels, H, W).
+
+        Returns
+        -------
+        torch.Tensor
+            Output logits tensor of shape (N, out_channels, H, W).
+        """
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)

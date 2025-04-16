@@ -8,10 +8,66 @@ from ..utils.preprocessing import load_image, load_mask, apply_img_preprocessing
 
 
 class SegmentationDataset(Dataset):
+    """
+    Dataset for loading image–mask pairs for semantic segmentation tasks.
 
-    def __init__(self, image_dir, mask_dir, img_transform=None, mask_reshape=None, rgb_mask=False, rgb_label_map=None,
-                 one_hot_target=False, num_classes=2, subset_size=None):
+    Parameters
+    ----------
+    image_dir : str
+        Path to the directory containing input image files.
+    mask_dir : str
+        Path to the directory containing corresponding mask files.
+    img_transform : callable, optional
+        A transform to apply to each input image. If None, no additional transform is applied.
+    mask_reshape : tuple of int (width, height), optional
+        If provided, masks will be resized to this (width, height). Must be a tuple.
+    rgb_mask : bool, default=False
+        If True, loads masks as RGB images and converts them via `rgb_label_map`.
+    rgb_label_map : dict, optional
+        Mapping from RGB tuple to integer class label. Required if `rgb_mask` is True.
+    one_hot_target : bool, default=False
+        If True, one-hot encodes the mask into shape `[num_classes, H, W]`.
+    num_classes : int, default=2
+        Number of classes for one-hot encoding. Ignored if `one_hot_target` is False.
+    subset_size : int, optional
+        If provided, randomly sample this many filenames (or fewer if dataset is smaller).
+    """
 
+    def __init__(self, image_dir, mask_dir, img_transform=None, mask_reshape=None,
+                 rgb_mask=False, rgb_label_map=None, one_hot_target=False,
+                 num_classes=2, subset_size=None):
+        """
+        Initialize the SegmentationDataset.
+
+        Reads image filenames, applies optional subsampling, and validates mask settings.
+
+        Parameters
+        ----------
+        image_dir : str
+            Directory with input images.
+        mask_dir : str
+            Directory with mask images.
+        img_transform : callable or None
+            Transform to apply to images.
+        mask_reshape : tuple of int or None
+            Desired mask size (width, height).
+        rgb_mask : bool
+            Whether masks are RGB images.
+        rgb_label_map : dict or None
+            RGB-to-label mapping if `rgb_mask` is True.
+        one_hot_target : bool
+            Whether to one-hot encode masks.
+        num_classes : int
+            Number of classes for one-hot encoding.
+        subset_size : int or None
+            Number of samples to randomly select.
+        
+        Raises
+        ------
+        ValueError
+            If `mask_reshape` is not a tuple when provided, or if `rgb_mask` is True but
+            `rgb_label_map` is not a valid dict.
+        """
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.transform = img_transform
@@ -37,10 +93,33 @@ class SegmentationDataset(Dataset):
         self.num_classes = num_classes
 
     def __len__(self):
+        """
+        Return the total number of samples.
+
+        Returns
+        -------
+        int
+            Number of image–mask pairs in the dataset.
+        """
         return len(self.file_names)
 
     def __getitem__(self, idx):
+        """
+        Load and return the image and its corresponding mask at the given index.
 
+        Parameters
+        ----------
+        idx : int
+            Index of the sample to retrieve.
+
+        Returns
+        -------
+        img : torch.Tensor
+            Preprocessed image tensor of shape [C, H, W].
+        mask : torch.Tensor
+            Mask tensor of shape [num_classes, H, W] if `one_hot_target` is True,
+            otherwise [1, H, W].
+        """
         filename = self.file_names[idx]
         img = load_image(os.path.join(self.image_dir, filename))
 
