@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -5,6 +6,7 @@ from torchvision import transforms
 
 from ..architectures import get_model
 from .preprocessing import apply_img_preprocessing
+from .common import generate_connected_components, expand_bbox, box_coco_to_corner
 
 
 def load_saved_model(model_name, saved_weight_path,  **kwargs):
@@ -125,3 +127,56 @@ def pred_degradation_category(model, test_img, img_transform=None, add_batch_dim
         pred_value = output.argmax().item()
 
     return pred_value
+
+
+def generate_individual_segments_n_annotations(img, mask, annot_prefix=None):
+    # generate connected components
+    num_labels, label_mask, bboxes = generate_connected_components(mask, connectivity=8)
+
+    # generate crops of each individual segments & its annotation (skip label 0, which is the background)
+    annot_results = []
+    for idx in range(1, num_labels):
+        coco_bbox = bboxes[idx].tolist()  # get coco format bbox
+
+        # expand bbox to add additional context
+        expanded_coco_bbox = expand_bbox(coco_bbox=coco_bbox, image_width=img.shape[1], image_height=img.shape[0],
+                                         padding=10)
+        xmin, ymin, xmax, ymax = box_coco_to_corner(
+            expanded_coco_bbox)  # convert to corner format required for cropping segments
+
+        orig_mask = (label_mask == idx).astype(np.uint8)   # get only the current segment in original mask
+
+        # # dilate the mask to include surrounding road region near lane marking
+        dilate_kernel = 16
+        kernel = np.ones((dilate_kernel, dilate_kernel))
+        dilated_mask = cv2.dilate(orig_mask, kernel, iterations=1)
+
+        # # use this dilated region to get neighboring road color info
+        segment = cv2.bitwise_and(img, img, mask=dilated_mask)
+        segment = segment[ymin:ymax + 1, xmin:xmax + 1].copy()  # get specific segment crop
+
+        # replaced the masked out pixels (black colored) in the segment with a color that would rarely
+        # appear on raod to help the model avoid confusion with dark colors at night
+        target_color = [0, 0, 0]
+        mask = np.all(segment == target_color, axis=-1)  # Find pixels that match the target color
+        segment[mask] = [84, 245, 66]  # bright green color
+
+        prefix = "" if annot_prefix is None else f"{annot_prefix}_"
+        segment_id = f"{prefix}object_{idx}"
+
+        # store annotations
+        segment_n_annotation = {
+            'id': segment_id,
+            'bounding_box': coco_bbox,
+            'degradation': -1,
+            "segment_crop": segment.copy()
+        }
+        annot_results.append(segment_n_annotation)
+
+    filename = "_image" if annot_prefix is None else f"{annot_prefix}"
+    annotations_dict = {
+        'image': filename,
+        'annotations': annot_results
+    }
+
+    return annotations_dict
