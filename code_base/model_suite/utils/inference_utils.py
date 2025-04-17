@@ -9,7 +9,24 @@ from .preprocessing import apply_img_preprocessing
 from .common import generate_connected_components, expand_bbox, box_coco_to_corner
 
 
-def load_saved_model(model_name, saved_weight_path,  **kwargs):
+def load_saved_model(model_name, saved_weight_path, **kwargs):
+    """
+    Initialize a model architecture and load pretrained weights.
+
+    Parameters
+    ----------
+    model_name : str
+        Identifier for the model architecture, as accepted by `get_model`.
+    saved_weight_path : str
+        Filesystem path to the saved weights file.
+    **kwargs
+        Additional keyword arguments forwarded to `get_model`.
+
+    Returns
+    -------
+    torch.nn.Module
+        The model instance with weights loaded from `saved_weight_path`.
+    """
     model = get_model(model_name, **kwargs)                                     # initialize model
     model.load_state_dict((torch.load(saved_weight_path, weights_only=True)))   # load weights
     return model
@@ -19,16 +36,23 @@ def generate_saliency_map(model, image, target_class=None, device="cpu"):
     """
     Generate the saliency map for a given image using the model.
 
-    Parameters:
-        model (nn.Module): The model to compute the saliency map for.
-        image (Tensor): The input image tensor with shape (C, H, W).
-        target_class (int or None): The class index to compute the saliency map for.
-                                    If None, uses the class with the highest score.
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model to compute the saliency map for.
+    image : PIL.Image or ndarray
+        The input image, to be converted to a tensor of shape (C, H, W).
+    target_class : int or None
+        The class index to compute the saliency map for. If None, uses the
+        class with the highest predicted score.
+    device : str or torch.device
+        Device on which to perform computation (e.g., "cpu" or "cuda").
 
-    Returns:
-        saliency_map (Tensor): The saliency map highlighting the important regions.
+    Returns
+    -------
+    numpy.ndarray
+        Saliency map array of shape (H, W), with values normalized to [0, 1].
     """
-
     # Define image transformation
     img_transform = transforms.Compose([transforms.ToTensor()])
 
@@ -61,9 +85,34 @@ def generate_saliency_map(model, image, target_class=None, device="cpu"):
     return saliency_map
 
 
-def pred_segmentation_mask(model, test_img, img_transform=None, add_batch_dim=False, pos_threshold=0.5,
-                           device="cpu"):
+def pred_segmentation_mask(model, test_img, img_transform=None, add_batch_dim=False,
+                           pos_threshold=0.5, device="cpu"):
+    """
+    Perform segmentation inference on a single image and return pixel-wise labels.
 
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained segmentation model.
+    test_img : PIL.Image or ndarray
+        Input image to segment.
+    img_transform : callable, optional
+        Preprocessing transform to apply to the image. If None, assumes
+        `apply_img_preprocessing` handles necessary steps.
+    add_batch_dim : bool, default=False
+        If True, adds a batch dimension before inference.
+    pos_threshold : float, default=0.5
+        Threshold for converting sigmoid outputs to binary labels when
+        performing binary segmentation (single-channel output).
+    device : str or torch.device, default="cpu"
+        Device for model inference.
+
+    Returns
+    -------
+    numpy.ndarray
+        Predicted label map(s). Shape is (H, W) for a single image or
+        (1, H, W) if `add_batch_dim=True`.
+    """
     model = model.to(device)    # ensure model is on same device as test data
 
     # apply image transformations
@@ -88,13 +137,34 @@ def pred_segmentation_mask(model, test_img, img_transform=None, add_batch_dim=Fa
             prob = F.softmax(logits, dim=1)          # convert to probs   (b, c, h, w)
             pred_labels = torch.argmax(prob, dim=1)  # convert to labels  (b, h, w)
 
-    # bring pred on cpu
-    pred_labels = pred_labels.cpu().numpy()
-    return pred_labels
+    return pred_labels.cpu().numpy()
 
 
-def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=False, device="cpu", precision=4):
+def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=False,
+                           device="cpu", precision=4):
+    """
+    Predict a continuous degradation value from an input image.
 
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained regression model.
+    test_img : PIL.Image or ndarray
+        Input image for prediction.
+    img_transform : callable, optional
+        Preprocessing transform to apply to the image.
+    add_batch_dim : bool, default=False
+        If True, adds a batch dimension before inference.
+    device : str or torch.device, default="cpu"
+        Device for model inference.
+    precision : int, default=4
+        Number of decimal places to round the output value.
+
+    Returns
+    -------
+    float
+        Predicted degradation value, rounded to `precision` decimals.
+    """
     model = model.to(device)   # ensure model is on same device as test data
 
     # apply image transformations
@@ -111,11 +181,31 @@ def pred_degradation_value(model, test_img, img_transform=None, add_batch_dim=Fa
     return round(pred_value, precision)
 
 
-def pred_degradation_category(model, test_img, img_transform=None, add_batch_dim=False, device="cpu"):
+def pred_degradation_category(model, test_img, img_transform=None,
+                              add_batch_dim=False, device="cpu"):
+    """
+    Predict a discrete degradation category index from an input image.
 
-    model = model.to(device)   # ensure model is on same device as test data
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained classification model.
+    test_img : PIL.Image or ndarray
+        Input image for prediction.
+    img_transform : callable, optional
+        Preprocessing transform to apply to the image.
+    add_batch_dim : bool, default=False
+        If True, adds a batch dimension before inference.
+    device : str or torch.device, default="cpu"
+        Device for model inference.
 
-    # apply image transformations
+    Returns
+    -------
+    int
+        Predicted class index for the degradation category.
+    """
+    model = model.to(device)
+
     test_batch = apply_img_preprocessing(test_img, transform=img_transform)
     if add_batch_dim:
         test_batch = test_batch.unsqueeze(0)       # (b, 3, h, w)
@@ -130,6 +220,29 @@ def pred_degradation_category(model, test_img, img_transform=None, add_batch_dim
 
 
 def generate_individual_segments_n_annotations(img, mask, annot_prefix=None):
+    """
+    Extract individual connected components from a mask and prepare annotations.
+
+    Parameters
+    ----------
+    img : ndarray
+        Original image array of shape (H, W, C).
+    mask : ndarray
+        2D binary or label mask of shape (H, W).
+    annot_prefix : str, optional
+        Prefix to prepend to each annotation's 'id' field. Defaults to None.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+          - 'image': str identifier for the image (prefix or '_image')
+          - 'annotations': list of dicts, each containing:
+              * 'id': unique segment identifier
+              * 'bounding_box': original COCO-format [x, y, w, h]
+              * 'degradation': placeholder (-1)
+              * 'segment_crop': cropped image array for that segment
+    """
     # generate connected components
     num_labels, label_mask, bboxes = generate_connected_components(mask, connectivity=8)
 

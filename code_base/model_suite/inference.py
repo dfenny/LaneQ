@@ -19,9 +19,32 @@ _target_code_to_name =  {v: k for k, v in _target_name_to_code.items()}
 
 
 class DegradationDetector:
+    """
+    Pipeline for detecting and classifying degradation segments in images.
 
-    def __init__(self, segmentation_weights_path, classification_weights_path, output_dir, min_segment_dim=10):
+    Combines a segmentation model to find regions of interest, then classifies
+    each segment with a classification model, and finally annotates and saves
+    the results.
+    """
 
+    def __init__(self, segmentation_weights_path, classification_weights_path,
+                 output_dir, min_segment_dim=10):
+        """
+        Initialize the DegradationDetector with pre-trained models and settings.
+
+        Parameters
+        ----------
+        segmentation_weights_path : str
+            Filesystem path to the saved weights for the segmentation model.
+        classification_weights_path : str
+            Filesystem path to the saved weights for the classification model.
+        output_dir : str
+            Directory where all prediction outputs (masks, JSON, annotated images)
+            will be saved.
+        min_segment_dim : int, default=10
+            Minimum width or height (in pixels) of a detected segment to classify;
+            smaller segments will be skipped.
+        """
         # model configs
         seg_model_name = "unet"
         segmentation_model_config = {'in_channels': 3, 'out_channels': 1}
@@ -48,9 +71,29 @@ class DegradationDetector:
             transforms.ToTensor()
         ])
 
-
     def predict(self, img_path, device="cpu"):
+        """
+        Run the full degradation detection pipeline on a single image.
 
+        Steps:
+          1. Load image and run segmentation to get a binary mask.
+          2. Extract individual segments via connected components.
+          3. Classify each sufficiently large segment.
+          4. Annotate the original image with colored bounding boxes.
+          5. Save the predicted mask, JSON annotations, and annotated image.
+
+        Parameters
+        ----------
+        img_path : str
+            Path to the input image file.
+        device : str or torch.device, default="cpu"
+            Device on which to perform model inference.
+
+        Returns
+        -------
+        dict
+            Contains "save_path" key pointing to the directory where outputs are saved.
+        """
         # required during saving output
         img_name = os.path.basename(img_path)
         img_name_without_ext = os.path.splitext(img_name)[0]

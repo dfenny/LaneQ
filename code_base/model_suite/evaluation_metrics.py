@@ -10,7 +10,30 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 
 def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True, foreground_th=0.5, device="cpu"):
+    """
+    Compute the mean Intersection-over-Union (IoU) score for a segmentation model.
 
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained segmentation model.
+    data_loader : torch.utils.data.DataLoader
+        DataLoader yielding (images, masks) pairs where masks are one-hot or single-channel tensors.
+    num_classes : int
+        Number of classes (including background) for IoU computation.
+    per_class : bool, default=True
+        If True, returns IoU for each class; otherwise returns overall mean IoU.
+    foreground_th : float, default=0.5
+        Threshold for converting sigmoid outputs to binary masks in binary segmentation.
+    device : str or torch.device, default="cpu"
+        Device on which to perform computations.
+
+    Returns
+    -------
+    numpy.ndarray or float
+        If `per_class` is True, an array of shape (num_classes,) with IoU per class;
+        otherwise a single float scalar with the overall mean IoU.
+    """
     meanIoU = MeanIoU(num_classes=num_classes, per_class=per_class, include_background=True, input_format='index')
     meanIoU = meanIoU.to(device)
 
@@ -49,7 +72,26 @@ def cal_MeanIoU_score(model, data_loader, num_classes, per_class=True, foregroun
 
 
 def cal_regression_metrics(model, data_loader, device="cpu"):
+    """
+    Compute common regression metrics (MSE, MAE, R²) for a regression model.
 
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained regression model.
+    data_loader : torch.utils.data.DataLoader
+        DataLoader yielding (images, target_value) pairs.
+    device : str or torch.device, default="cpu"
+        Device on which to perform inference.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+          - "MSE": Mean Squared Error (float, rounded to 4 decimals)
+          - "MAE": Mean Absolute Error (float, rounded to 4 decimals)
+          - "R2" : R² score (float, rounded to 4 decimals)
+    """
     model.to(device).eval()
     y_true, y_pred = [], []
     with torch.no_grad():
@@ -69,7 +111,29 @@ def cal_regression_metrics(model, data_loader, device="cpu"):
 
 
 def cal_classification_metrics(model, data_loader, device="cpu"):
+    """
+    Compute classification performance metrics and confusion matrix for a classifier.
 
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained classification model.
+    data_loader : torch.utils.data.DataLoader
+        DataLoader yielding (images, one-hot-labels) pairs.
+    device : str or torch.device, default="cpu"
+        Device on which to perform inference.
+
+    Returns
+    -------
+    metrics : dict
+        Dictionary with rounded (4 decimals) values for:
+          - 'accuracy'
+          - 'precision' (weighted)
+          - 'recall'    (weighted)
+          - 'f1'        (weighted)
+    cm : ndarray
+        Normalized confusion matrix of shape (n_classes, n_classes).
+    """
     model.to(device).eval()
     y_true, y_pred = [], []
     with torch.no_grad():

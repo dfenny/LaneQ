@@ -4,7 +4,20 @@ import torch.nn.functional as F
 
 
 class CNN(nn.Module):
+    """
+    Convolutional Neural Network (CNN) model.
+    """
     def __init__(self, in_channels=3, out_dim=1):
+        """
+        Initialize the CNN model.
+
+        Parameters
+        ----------
+        in_channels : int, optional
+            Number of input channels, by default 3.
+        out_dim : int, optional
+            Number of output dimensions, by default 1.
+        """
         super(CNN, self).__init__()
         
         # Convolutional layers
@@ -17,6 +30,19 @@ class CNN(nn.Module):
         self.fc2 = nn.Linear(64, out_dim)
 
     def forward(self, x):
+        """
+        Forward pass of the CNN model.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch_size, in_channels, height, width).
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape (batch_size, out_dim).
+        """
         x = F.relu(self.conv1(x))  
         x = F.max_pool2d(x, kernel_size=2, stride=2)
         x = F.relu(self.conv2(x))  
