@@ -11,7 +11,7 @@ authors = [
     { name = "Douglas Fenwick" }, 
     { name = "Nihal Karne" }
 ]
-readme = "README.md"
+readme = "PyPI_README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.9"
