@@ -1,6 +1,0 @@
-# Ignore all files
-README.md
-
-# Except README.md
-!README.md
-!.gitignore
