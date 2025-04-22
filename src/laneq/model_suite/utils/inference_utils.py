@@ -28,7 +28,8 @@ def load_saved_model(model_name, saved_weight_path, **kwargs):
         The model instance with weights loaded from `saved_weight_path`.
     """
     model = get_model(model_name, **kwargs)                                     # initialize model
-    model.load_state_dict((torch.load(saved_weight_path, weights_only=True)))   # load weights
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
+    model.load_state_dict((torch.load(saved_weight_path, map_location=DEVICE, weights_only=True)))   # load weights
     return model
 
 
