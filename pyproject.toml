@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "LaneQ"  # ← change this if needed
-version = "0.1.0"
+version = "0.2.0"
 description = "LaneQ: A Python package for lane line detection and classification"
 authors = [
     { name = "Ankith Boggaram" }, 
@@ -12,9 +12,11 @@ authors = [
     { name = "Nihal Karne" }
 ]
 readme = "README.md"
-license = { file="LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 dependencies = [
+    "huggingface-hub>=0.14",
     "numpy>=2.0",
     "opencv-python>=4.0.0.0",
     "pycocotools>=2",

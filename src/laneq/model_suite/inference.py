@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 import torch
 from torchvision import transforms
+from huggingface_hub import hf_hub_download
 
 from .utils.common import add_bbox, box_coco_to_corner
 from .utils.preprocessing import load_image
@@ -27,24 +28,37 @@ class DegradationDetector:
     the results.
     """
 
-    def __init__(self, segmentation_weights_path, classification_weights_path,
-                 output_dir, min_segment_dim=10):
+    def __init__(self, output_dir, segmentation_weights_path=None, 
+                 classification_weights_path=None, min_segment_dim=10):
         """
         Initialize the DegradationDetector with pre-trained models and settings.
 
         Parameters
         ----------
-        segmentation_weights_path : str
-            Filesystem path to the saved weights for the segmentation model.
-        classification_weights_path : str
-            Filesystem path to the saved weights for the classification model.
         output_dir : str
             Directory where all prediction outputs (masks, JSON, annotated images)
             will be saved.
+        segmentation_weights_path : str, default=None
+            Filesystem path to the saved weights for the segmentation model.
+            If no path is provided, the model will be downloaded from Hugging Face Hub.
+        classification_weights_path : str, default=None
+            Filesystem path to the saved weights for the classification model.
+            If no path is provided, the model will be downloaded from Hugging Face Hub.
         min_segment_dim : int, default=10
             Minimum width or height (in pixels) of a detected segment to classify;
             smaller segments will be skipped.
         """
+        # if model weights are not provided, download from Hugging Face Hub
+        if segmentation_weights_path is None:
+            segmentation_weights_path = hf_hub_download(
+                repo_id="dfenny/laneq",
+                filename="laneq_unet.pth"
+            )
+        if classification_weights_path is None:
+            classification_weights_path = hf_hub_download(
+                repo_id="dfenny/laneq",
+                filename="laneq_cnn_sppf.pth"
+            )
         # model configs
         seg_model_name = "unet"
         segmentation_model_config = {'in_channels': 3, 'out_channels': 1}
