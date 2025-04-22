@@ -199,3 +199,6 @@ experiment_results/*
 # to ignore all files under regression/data folder except README.md
 saved_weights/*
 !saved_weights/README.md
+
+.build/
+.test/
