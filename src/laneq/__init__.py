@@ -1,0 +1,1 @@
+from .model_suite.inference import DegradationDetector

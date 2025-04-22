@@ -1,7 +1,0 @@
-pycocotools
-opencv-python
-numpy
-scipy
-torch
-torchmetrics
-scikit-image
