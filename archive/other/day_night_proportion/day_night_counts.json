@@ -1,1 +1,0 @@
-{"test": {"night": 8036, "daytime": 10446, "dawn/dusk": 1476, "undefined": 42}, "train": {"night": 28028, "dawn/dusk": 5033, "daytime": 36800, "undefined": 139}, "val": {"daytime": 5258, "night": 3929, "dawn/dusk": 778, "undefined": 35}}
