@@ -1,0 +1,49 @@
+enable_cuda: TRUE
+
+
+model:
+    in_channels: 3
+    out_channels: 1     # Leave this one for binary segmentation
+
+
+# dataset location and related parameters
+dataset_loc:
+    dataset_type: 'segmentation'   # type of data been fetched
+    train:
+        img_dir: /cs6945share/retro_project/bdd100k/images/train
+        mask_dir: /cs6945share/retro_project/bdd100k/generated_masks_v0_1/train
+        random_subset: null     # set size of random subset to use else null for entire dataset
+    val:
+        img_dir: /cs6945share/retro_project/bdd100k/images/val
+        mask_dir: /cs6945share/retro_project/bdd100k/generated_masks_v0_1/val
+        random_subset: null     # set size of random subset to use else null for entire dataset
+
+
+# pytorch dataloader parameters
+data_loader:
+    batch_size: 1
+    num_workers: 2
+    shuffle: TRUE
+
+
+# dataset preprocessing
+dataset_preprocessing:
+    resize_width: 1280
+    resize_height: 720
+    RGB_mask: FALSE                                 # set true if mask in dataset is RGB and not grayscale
+    RGB_labelmap: configs/kaggle_road_seg.json      # required if RGB_mask is TRUE
+    one_hot_mask: FALSE
+    num_classes: 2                                  # used for one hot encoding and meanIoU calculation
+
+
+# training related hyperparameters
+training:
+    num_epochs: 10
+    learning_rate: 0.05
+    resume_checkpoint: null      # should be path for checkpoint .pth file or null
+    save_checkpoint_freq: 5      # freq to save checkpoint wrt to epoch count. Set to 0 if no check points needs to saved
+    loss_fn_name: 'BCE'             # options: BCE, CrossEntropy, FocalLoss, MSE
+
+
+# location where model train results needs to be saved
+results_loc: ./experiment_results/

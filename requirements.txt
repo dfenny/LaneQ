@@ -1,7 +1,12 @@
-pycocotools
-opencv-python
-numpy
-scipy
-torch
-torchmetrics
-scikit-image
+# Requirements for working with the repo locally
+huggingface-hub>=0.14
+numpy>=2.0
+opencv-python>=4.0.0.0
+pycocotools>=2
+PyYAML>=6.0
+scikit-image>=0.25
+scikit-learn>=1.0
+scipy>=1.0
+torch>=2.0
+torchmetrics>=1.5
+torchvision>=0.15
