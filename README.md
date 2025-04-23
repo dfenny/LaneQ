@@ -92,7 +92,7 @@ Or to run the GUI:
 python -m laneq
 ```
 
-Example usage and description of available options.
+Refer to [demo_notebooks](demo_notebooks) for a more detailed usage guide.
 <!-- <div align="center">
   <img src="images/architecture_with_example.png" alt="Day time image" width="800">
 </div> -->
