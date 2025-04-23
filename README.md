@@ -53,8 +53,8 @@ If you'd prefer to work with the latest development version or contribute to the
 Clone the repository:
 
 ```bash
-git clone https://github.com/dfenny/retro.git
-cd retro
+git clone https://github.com/dfenny/LaneQ.git
+cd LaneQ
 ```
 
 Install the required dependencies:
