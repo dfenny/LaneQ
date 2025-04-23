@@ -170,35 +170,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# to ignore all files under data folder except README.md
-archive/segmentation/data/*
-!archive/segmentation/data/README.md
-
-# to ignore all files under segementation/experiment_results folder except README.md
-archive/segmentation/experiment_results/*
-!archive/segmentation/experiment_results/README.md
-
-# to ignore all files under degradation_calculation/output folder except README.md
-archive/degradation_calculation/output/*
-!archive/degradation_calculation/output/README.md
-
-# to ignore all files under regression/experiment_results folder except README.md
-archive/regression/experiment_results/*
-!archive/regression/experiment_results/README.md
-
 **/.DS_Store
 
-# to ignore all files under regression/data folder except README.md
-archive/regression/data/*
-!archive/regression/data/README.md
-
-# to ignore all files under regression/data folder except README.md
-experiment_results/*
-!experiment_results/README.md
-
-# to ignore all files under regression/data folder except README.md
+# to ignore all files under saved_wights
 saved_weights/*
-!saved_weights/README.md
 
 .build/
 .test/
