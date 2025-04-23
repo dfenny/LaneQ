@@ -1,6 +1,8 @@
-Automated Lane Line Quality Assessment
-
-![Model Architecture with Example](https://raw.githubusercontent.com/dfenny/LaneQ/main/images/architecture_with_example.png)
+<h1 align="center">
+  <a href="https://github.com/dfenny/retro/tree/main">
+    <img src="images/LaneQ_background.png" alt="LaneQ logo" width="450" height="187">
+  </a>
+</h1>
 
 Install:
 
